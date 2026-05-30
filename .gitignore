@@ -39,3 +39,6 @@ go.work.sum
 node_modules/
 dist/
 *.tsbuildinfo
+
+# Built frontend (emitted by Vite into the server for static serving)
+server/public/
