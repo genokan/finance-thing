@@ -7,7 +7,7 @@
 - finance_thing user needs CREATEDB privilege for Prisma shadow database
 
 ## Dev Commands
-- `npm run dev` — from repo root, starts backend (3000) + frontend (5173) together via concurrently. Vite proxies `/api` → backend. Open http://localhost:5173
+- `npm run dev` — from repo root, starts frontend (Vite, 3000) + backend (Express API, 3001) via concurrently. Vite proxies `/api` → 3001. Open http://localhost:3000. (Prod: single container serves everything on 3000 via Express.)
 - `npm run seed` (root) or `cd server && SEED_EMAIL=x SEED_PASSWORD=y npm run db:seed` — create initial user
 - `npm run build` (root) — build client then server
 - `npm run install:all` (root) — install root + server + client deps

@@ -10,10 +10,11 @@ export default defineConfig({
     emptyOutDir: true,
   },
   server: {
-    port: 5173,
+    port: 3000,
     proxy: {
+      // Backend runs on 3001 in dev (Vite owns 3000); /api is proxied to it.
       '/api': {
-        target: 'http://localhost:3000',
+        target: 'http://localhost:3001',
         changeOrigin: true,
       },
     },
