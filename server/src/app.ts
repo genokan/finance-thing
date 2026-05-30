@@ -1,4 +1,5 @@
 import express from 'express'
+import type { Request, Response, NextFunction } from 'express'
 import helmet from 'helmet'
 import cookieParser from 'cookie-parser'
 import { authRouter } from './routes/auth'
@@ -25,8 +26,11 @@ export function createApp() {
   // Public routes
   app.use('/api/auth', authRouter)
 
-  // Protected routes
-  app.use('/api', authenticate)
+  // Protected routes — skip /api/auth which is handled above
+  app.use('/api', (req: Request, res: Response, next: NextFunction) => {
+    if (req.path.startsWith('/auth')) return next()
+    authenticate(req, res, next)
+  })
   app.use('/api/dashboard', dashboardRouter)
   app.use('/api/expenses', expensesRouter)
   app.use('/api/income', incomeRouter)
@@ -36,6 +40,11 @@ export function createApp() {
   app.use('/api/insights', insightsRouter)
   app.use('/api/settings', settingsRouter)
   app.use('/api/plaid', plaidRouter)
+
+  app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
+    console.error(err.message)
+    res.status(500).json({ error: 'Internal server error' })
+  })
 
   return app
 }
