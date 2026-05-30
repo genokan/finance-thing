@@ -51,12 +51,11 @@ enum CategoryType {
   DISCRETIONARY
 }
 
-enum ExpenseFrequency {
-  MONTHLY
-  BIMONTHLY      // every 2 months
-  QUARTERLY
-  SEMIANNUAL
-  ANNUAL
+enum IntervalUnit {
+  DAY
+  WEEK
+  MONTH
+  YEAR
 }
 
 enum InvestmentType {
@@ -65,8 +64,7 @@ enum InvestmentType {
   ROTH_IRA
   PLAN_401K
   DEFINED_CONTRIBUTION
-  RSU_VESTED
-  RSU_UNVESTED
+  RSU
   SAVINGS
   MONEY_MARKET
   CHECKING
@@ -78,11 +76,12 @@ enum DebtType {
 }
 
 model User {
-  id           String   @id @default(cuid())
-  email        String   @unique
-  passwordHash String
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id              String   @id @default(cuid())
+  email           String   @unique
+  passwordHash    String
+  benchmarkRate   Decimal? @db.Decimal(6, 4) // user's best current safe return rate (HYSA, MM, etc.)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 }
 
 model Category {
@@ -93,27 +92,28 @@ model Category {
 }
 
 model Institution {
-  id                  String              @id @default(cuid())
-  name                String              @unique
-  investmentAccounts  InvestmentAccount[]
-  debts               Debt[]
-  plaidItems          PlaidItem[]
+  id                 String              @id @default(cuid())
+  name               String              @unique
+  investmentAccounts InvestmentAccount[]
+  debts              Debt[]
+  plaidItems         PlaidItem[]
 }
 
 model ExpenseItem {
-  id          String           @id @default(cuid())
-  name        String
-  amount      Decimal          @db.Decimal(12, 2)
-  frequency   ExpenseFrequency @default(MONTHLY)
-  categoryId  String
-  category    Category         @relation(fields: [categoryId], references: [id])
-  notes       String?
-  expiresAt   DateTime?
-  renewsAt    DateTime?
-  isActive    Boolean          @default(true)
-  createdAt   DateTime         @default(now())
-  updatedAt   DateTime         @updatedAt
-  snapshots   ExpenseSnapshot[]
+  id            String       @id @default(cuid())
+  name          String
+  amount        Decimal      @db.Decimal(12, 2)
+  intervalCount Int          @default(1)   // e.g. 2
+  intervalUnit  IntervalUnit @default(MONTH) // e.g. WEEK → "every 2 weeks"
+  categoryId    String
+  category      Category     @relation(fields: [categoryId], references: [id])
+  notes         String?
+  expiresAt     DateTime?
+  renewsAt      DateTime?
+  isActive      Boolean      @default(true)
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+  snapshots     ExpenseSnapshot[]
 }
 
 model IncomeSource {
@@ -136,35 +136,41 @@ model IncomeDistribution {
 }
 
 model InvestmentAccount {
-  id            String            @id @default(cuid())
-  name          String
-  type          InvestmentType
-  ticker        String?
-  shares        Decimal?          @db.Decimal(18, 6)
-  institutionId String?
-  institution   Institution?      @relation(fields: [institutionId], references: [id])
-  currentValue  Decimal           @db.Decimal(12, 2)
-  isActive      Boolean           @default(true)
-  lastUpdatedAt DateTime?
-  createdAt     DateTime          @default(now())
-  updatedAt     DateTime          @updatedAt
-  snapshots     InvestmentSnapshot[]
+  id             String         @id @default(cuid())
+  name           String
+  type           InvestmentType
+  ticker         String?
+  // For non-RSU accounts: shares * price = currentValue
+  shares         Decimal?       @db.Decimal(18, 6)
+  // For RSU accounts: vested and unvested tracked separately
+  vestedShares   Decimal?       @db.Decimal(18, 6)
+  unvestedShares Decimal?       @db.Decimal(18, 6)
+  unvestedValue  Decimal?       @db.Decimal(12, 2) // unvested RSU market value (excluded from liquid net worth)
+  institutionId  String?
+  institution    Institution?   @relation(fields: [institutionId], references: [id])
+  currentValue   Decimal        @db.Decimal(12, 2) // vested value only for RSUs
+  isActive       Boolean        @default(true)
+  lastUpdatedAt  DateTime?
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+  snapshots      InvestmentSnapshot[]
 }
 
 model Debt {
-  id             String    @id @default(cuid())
+  id             String       @id @default(cuid())
   name           String
   type           DebtType
-  principal      Decimal   @db.Decimal(12, 2)
-  monthlyPayment Decimal   @db.Decimal(12, 2)
-  apr            Decimal   @db.Decimal(6, 4)
+  principal      Decimal      @db.Decimal(12, 2)
+  monthlyPayment Decimal      @db.Decimal(12, 2)
+  apr            Decimal      @db.Decimal(6, 4)
   institutionId  String?
   institution    Institution? @relation(fields: [institutionId], references: [id])
-  payoffDate     DateTime?
+  payoffDate     DateTime?    // for SHORT_TERM 0% APR promos
+  promoApr       Decimal?     @db.Decimal(6, 4) // APR after promo ends (SHORT_TERM only)
   notes          String?
-  isActive       Boolean   @default(true)
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
+  isActive       Boolean      @default(true)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
   snapshots      DebtSnapshot[]
 }
 
@@ -185,7 +191,7 @@ model MonthlySnapshot {
 model ExpenseSnapshot {
   id                String          @id @default(cuid())
   snapshotId        String
-  snapshot          MonthlySnapshot @relation(fields: [snapshotId], references: [id])
+  snapshot          MonthlySnapshot @relation(fields: [snapshotId], references: [id], onDelete: Cascade)
   expenseItemId     String
   expenseItem       ExpenseItem     @relation(fields: [expenseItemId], references: [id])
   monthlyEquivalent Decimal         @db.Decimal(12, 2)
@@ -194,7 +200,7 @@ model ExpenseSnapshot {
 model IncomeSnapshot {
   id             String          @id @default(cuid())
   snapshotId     String
-  snapshot       MonthlySnapshot @relation(fields: [snapshotId], references: [id])
+  snapshot       MonthlySnapshot @relation(fields: [snapshotId], references: [id], onDelete: Cascade)
   incomeSourceId String
   incomeSource   IncomeSource    @relation(fields: [incomeSourceId], references: [id])
   amount         Decimal         @db.Decimal(12, 2)
@@ -203,16 +209,17 @@ model IncomeSnapshot {
 model InvestmentSnapshot {
   id                  String            @id @default(cuid())
   snapshotId          String
-  snapshot            MonthlySnapshot   @relation(fields: [snapshotId], references: [id])
+  snapshot            MonthlySnapshot   @relation(fields: [snapshotId], references: [id], onDelete: Cascade)
   investmentAccountId String
   investmentAccount   InvestmentAccount @relation(fields: [investmentAccountId], references: [id])
   value               Decimal           @db.Decimal(12, 2)
+  unvestedValue       Decimal?          @db.Decimal(12, 2)
 }
 
 model DebtSnapshot {
   id             String          @id @default(cuid())
   snapshotId     String
-  snapshot       MonthlySnapshot @relation(fields: [snapshotId], references: [id])
+  snapshot       MonthlySnapshot @relation(fields: [snapshotId], references: [id], onDelete: Cascade)
   debtId         String
   debt           Debt            @relation(fields: [debtId], references: [id])
   principal      Decimal         @db.Decimal(12, 2)
@@ -223,7 +230,7 @@ model PlaidItem {
   id            String      @id @default(cuid())
   institutionId String
   institution   Institution @relation(fields: [institutionId], references: [id])
-  accessToken   String      // AES-256 encrypted before storage
+  accessToken   String      // AES-256-GCM encrypted before storage — never plaintext
   itemId        String      @unique
   createdAt     DateTime    @default(now())
   updatedAt     DateTime    @updatedAt
@@ -234,11 +241,11 @@ model PlaidItem {
 
 | Field | Formula |
 |---|---|
-| Monthly equivalent | `amount / frequencyMonths` where `MONTHLY=1, BIMONTHLY=2, QUARTERLY=3, SEMIANNUAL=6, ANNUAL=12` |
+| Monthly equivalent | `amount / daysInInterval * 30.44` — normalized to average month using `intervalCount * unitDays` where `DAY=1, WEEK=7, MONTH=30.44, YEAR=365.25` |
 | Total essential expenses | sum of essential category monthly equivalents |
 | Total discretionary expenses | sum of discretionary category monthly equivalents |
 | 50/30/20 percentages | expense totals / net monthly income |
-| Liquid net worth | cash/savings accounts + vested investments - total debt principal |
+| Liquid net worth | SAVINGS + MONEY_MARKET + CHECKING + vested investments - total debt principal |
 | Total net worth | liquid net worth + unvested RSU value |
 
 ---
@@ -247,63 +254,90 @@ model PlaidItem {
 
 ### 5.1 Dashboard
 
-- Net worth (liquid and total) prominently displayed
-- Monthly income vs. expenses summary
-- 50/30/20 breakdown with progress indicators
-- Investment portfolio total (vested / unvested split)
-- Upcoming renewals and payoff deadlines (within 90 days)
-- Quick-trigger "Record this month" button
+- Net worth (liquid and total) as the hero — large, prominent, above everything else
+- Monthly income vs. total expenses (essential + discretionary + debt payments)
+- 50/30/20 breakdown with visual progress bars against targets
+- Investment portfolio total (vested / unvested split clearly labeled)
+- Financial Insights panel (see §5.9)
+- Upcoming alerts: renewals, 0% APR promo expirations within 90 days
+- "Record this month" button — always accessible
 
 ### 5.2 Expenses
 
-- List all recurring expenses with monthly equivalent displayed regardless of actual frequency
-- Add / edit / deactivate expenses (soft delete — preserved in historical snapshots)
+- List all recurring expenses with their actual amount, frequency label, and monthly equivalent
+- Add / edit / deactivate (soft delete — preserved in historical snapshots)
+- Frequency is free-form: any `intervalCount` + `intervalUnit` combination (e.g. every 6 weeks, every 2 years)
 - Category management (Essential / Discretionary)
-- Notes field supports expiry dates, renewal dates, and free text
-- Filter by category, sort by amount
+- Notes, expiry date, renewal date fields
+- Filter by category, sort by monthly equivalent descending
 
 ### 5.3 Income
 
 - List income sources with monthly amounts
-- Income distribution: show how a paycheck is allocated across accounts
+- Income distribution breakdown per source: shows where each paycheck goes (savings, checking, bills, etc.)
 - Add / edit / deactivate income sources
 
 ### 5.4 Investments
 
-- List all accounts/holdings grouped by institution
-- Separate display for vested vs. unvested RSUs
-- Manual value override for any account
-- Auto price update for accounts with a ticker symbol (via market data API)
-- Plaid connection for supported institutions (banks, some brokerages)
-- CSV import for unsupported accounts (retirement accounts, etc.)
+- List all accounts grouped by institution
+- RSU accounts show vested value and unvested value separately; only vested counts toward liquid net worth
+- Manual value override for any account at any time
+- Auto-price update for accounts with a ticker (`shares * latestPrice`) via Finnhub
+- Plaid connection for supported institutions
+- CSV import for unsupported accounts (retirement, DC plans)
 
 ### 5.5 Debt Tracker
 
-- Short-term debt: track 0% APR promo items with payoff deadline
-- Long-term debt: track principal, APR, monthly payment, payoff progress
-- Alert when a 0% APR promo deadline is approaching (within 60 days)
+- Short-term debt: 0% APR promo items with payoff deadline and post-promo APR
+- Long-term debt: principal, APR, monthly payment, estimated payoff date
+- Visual payoff progress bar for long-term debt
+- Alert badge when a 0% promo is within 60 days of expiring
 
 ### 5.6 Monthly Snapshots
 
-- Manually trigger a snapshot at any time ("Record this month")
-- Snapshot captures the current value of every expense, income source, investment, and debt
-- One snapshot per calendar month enforced at the DB level (`@@unique([year, month])`)
-- If a snapshot already exists for the current month, user can overwrite it — all existing child records for that snapshot are deleted and recreated from current data
+- "Record this month" captures point-in-time values of all active expenses, income sources, investments, and debts
+- One snapshot per calendar month enforced at DB level (`@@unique([year, month])`)
+- Overwriting a month deletes all child records via cascade and recreates them — user is warned before overwrite
+- Snapshot history accessible from the History view
 
 ### 5.7 Time Series / History
 
-- Line chart of net worth over time
-- Stacked area chart of expenses by category over time
-- Investment portfolio value over time
-- Debt principal paydown over time
-- All charts use snapshot data — can go back to any recorded month
+- Line chart: net worth over time (liquid and total overlaid)
+- Stacked area chart: expenses by category over time
+- Line chart: investment portfolio value over time
+- Line chart: debt principal paydown over time
+- All charts driven by snapshot data; empty state shown when fewer than 2 snapshots exist
 
 ### 5.8 CSV Import
 
-- Upload a CSV with columns: `account_name`, `institution`, `type`, `value`, `ticker` (optional)
-- Preview parsed rows before importing
-- Map CSV columns to schema fields if headers don't match exactly
-- Used primarily for retirement accounts and institutions without Plaid support
+- Upload CSV for investment accounts (retirement, DC plans, etc.)
+- Expected columns: `account_name`, `institution`, `type`, `value`, `ticker` (optional), `shares` (optional)
+- Preview parsed rows before import
+- Column mapping UI for non-standard headers
+- Imported accounts can be manually overridden at any time
+
+### 5.9 Financial Insights
+
+A dedicated panel on the dashboard providing actionable guidance based on the user's actual data.
+
+**Opportunity cost analysis — per debt:**
+- Compare each debt's APR against the user's `benchmarkRate` (set in Settings — their best current safe return, e.g. HYSA or money market rate)
+- Verdict displayed per debt:
+  - APR > benchmarkRate + 2%: "Pay this off aggressively — costs more than you can safely earn"
+  - APR within 2% of benchmarkRate: "Balanced — either direction is reasonable"
+  - APR < benchmarkRate: "Keep this debt — you earn more investing than paying it off"
+- Example: car loan at 2.74%, benchmark 5.00% → "You're ahead by 2.26% keeping this loan. Park extra cash in savings."
+
+**Priority checklist (shown in order):**
+1. 401k employer match — surface if user has a PLAN_401K account; prompt them to confirm they're capturing the full match (checkbox, not automated)
+2. Emergency fund coverage — `liquid cash / monthly essential expenses` = months covered; target is 3-6 months
+3. High-interest debt — flag any debt with APR > 7.5% as priority payoff
+4. 0% APR countdown — list promos expiring within 60 days with post-promo rate
+
+**Benchmarking:**
+- `benchmarkRate` is set by the user in Settings (e.g. 5.00% for a current HYSA)
+- All opportunity cost math uses this rate
+- Shown clearly in the Insights panel so the user knows what rate is being used
 
 ---
 
@@ -313,21 +347,21 @@ model PlaidItem {
 
 - Provider: **Finnhub** (free tier: 60 req/min, sufficient for personal use)
 - Triggered manually ("Refresh prices") or on a schedule via `node-cron`
-- Only updates `InvestmentAccount` records where `ticker` is set and type is `BROKERAGE`, `IRA`, `ROTH_IRA`, or `RSU_VESTED`
-- Updates `currentValue = shares * latestPrice` and sets `lastUpdatedAt`
-- Rate limiting handled with a small delay between requests
+- Updates accounts where `ticker` is set: `currentValue = vestedShares * latestPrice` (for RSUs) or `shares * latestPrice` (for others)
+- Sets `lastUpdatedAt` on each updated account
+- Delays between requests to respect rate limits
 
 ### 6.2 Plaid
 
-- Used for: bank accounts (HYSA, checking, savings), money market accounts, supported brokerages
-- Flow: Link button → Plaid Link SDK → exchange public token → store encrypted access token
-- `accessToken` encrypted with AES-256-GCM before writing to DB; decrypted in memory only when making Plaid API calls
-- Pulls account balances on demand or on schedule
+- Used for: SAVINGS, MONEY_MARKET, CHECKING account balances; supported brokerage accounts
+- Flow: Link button → Plaid Link SDK → exchange public token → AES-256-GCM encrypt access token → store
+- Access token decrypted in memory only when making Plaid API calls; never logged
+- Pulls balances on demand ("Sync accounts") or scheduled via `node-cron`
 - Does **not** pull transactions (out of scope)
 
 ### 6.3 CSV Import
 
-See Feature 5.8 above.
+See Feature §5.8.
 
 ---
 
@@ -340,12 +374,12 @@ POST   /api/auth/login
 POST   /api/auth/logout
 POST   /api/auth/refresh
 
-GET    /api/dashboard              — computed summary (net worth, 50/30/20, etc.)
+GET    /api/dashboard                     — computed summary + insights
 
 GET    /api/expenses
 POST   /api/expenses
 PUT    /api/expenses/:id
-DELETE /api/expenses/:id           — soft delete (sets isActive = false)
+DELETE /api/expenses/:id                  — soft delete
 
 GET    /api/income
 POST   /api/income
@@ -356,8 +390,8 @@ GET    /api/investments
 POST   /api/investments
 PUT    /api/investments/:id
 DELETE /api/investments/:id
-POST   /api/investments/refresh-prices   — triggers Finnhub update for all tickers
-POST   /api/investments/import-csv       — CSV upload
+POST   /api/investments/refresh-prices    — Finnhub update for all tickers
+POST   /api/investments/import-csv        — CSV upload + parse
 
 GET    /api/debts
 POST   /api/debts
@@ -365,18 +399,67 @@ PUT    /api/debts/:id
 DELETE /api/debts/:id
 
 GET    /api/snapshots
-POST   /api/snapshots                    — record current month
+POST   /api/snapshots                     — record current month (warns if exists)
 GET    /api/snapshots/:year/:month
 
-GET    /api/plaid/link-token             — create Plaid Link token
-POST   /api/plaid/exchange               — exchange public token, store item
-POST   /api/plaid/sync                   — pull latest balances for all Plaid items
-DELETE /api/plaid/items/:id              — disconnect an institution
+GET    /api/insights                      — opportunity cost + priority checklist
+
+GET    /api/settings
+PUT    /api/settings                      — update benchmarkRate, etc.
+
+GET    /api/plaid/link-token
+POST   /api/plaid/exchange
+POST   /api/plaid/sync
+DELETE /api/plaid/items/:id
 ```
 
 ---
 
-## 8. Security
+## 8. UI / Design Direction
+
+### Philosophy
+
+Numbers are the product. The UI exists to surface financial data clearly, not to decorate it. Every design decision serves legibility and trust.
+
+### Visual Language
+
+| Token | Value | Notes |
+|---|---|---|
+| Background | `#0F0F13` | Near-black with slight cool tint |
+| Surface | `#17171F` | Card backgrounds |
+| Border | `#242432` | 1px, subtle — no heavy shadows |
+| Text primary | `#F0F0F5` | Near-white |
+| Text secondary | `#8888A0` | Labels, metadata |
+| Accent | `#F59E0B` | Amber/gold — interactive elements, key highlights |
+| Positive | `#10B981` | Gains, under-budget |
+| Negative | `#F43F5E` | Losses, over-budget, alerts |
+| Font | Geist or Inter | `font-variant-numeric: tabular-nums` on all financial figures |
+
+### Layout
+
+- Mobile-first, single-column on small screens; two-column on desktop (sidebar nav + content)
+- Net worth displayed as the hero number at the top of the dashboard — large (3xl+), no decorative chrome around it
+- Cards are flat with a 1px border, no drop shadows, no rounded pill shapes
+- Color used only for directional meaning (positive/negative/accent) — never decorative
+- Generous vertical spacing between sections; dense within a card
+
+### Mobile
+
+- Bottom tab navigation on mobile (Dashboard, Expenses, Investments, Debt, History)
+- All tap targets minimum 44px
+- Numbers scale down with viewport but remain the dominant visual element
+- No horizontal scroll anywhere
+
+### Charts
+
+- Library: Recharts (lightweight, composable, React-native)
+- Dark-themed, no gridlines except subtle horizontal guides
+- Accent color for primary series; muted secondary for comparison series
+- Tooltips show exact values on hover/tap
+
+---
+
+## 9. Security
 
 | Concern | Approach |
 |---|---|
@@ -394,7 +477,7 @@ DELETE /api/plaid/items/:id              — disconnect an institution
 
 ---
 
-## 9. Out of Scope
+## 10. Out of Scope
 
 - Day-to-day transaction tracking
 - Bill pay or any write operations to financial institutions
@@ -406,7 +489,7 @@ DELETE /api/plaid/items/:id              — disconnect an institution
 
 ---
 
-## 10. Environment Variables
+## 11. Environment Variables
 
 ```env
 DATABASE_URL=postgresql://...
