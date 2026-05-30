@@ -1,22 +1,21 @@
 # finance-thing
 
 ## Infrastructure
-- Postgres runs in Docker on `pi5-1.opsguy.io` (container name: `postgres`), accessible at `pg1.opsguy.io:5432` from the homelab network only
-- To reach Postgres from this Mac: `ssh -i ~/.ssh/id_ed25519 -f -N -L 15432:127.0.0.1:5432 bcant@pi5-1.opsguy.io`, then use `localhost:15432`
-- SSH user on pi5-1: `bcant@pi5-1.opsguy.io`
-- DB user: `finance_thing`, password in `server/.env` (gitignored)
-- Prisma migrations: use `prisma db push` (not `migrate dev` — non-interactive environment)
+- Postgres runs in Docker on `pi5-1.opsguy.io`, reachable directly at `pg1.opsguy.io:5432` (this laptop and the homelab can both reach it — no tunnel needed)
+- DB user: `finance_thing`, password in `server/.env` (gitignored). DATABASE_URL already points at `pg1.opsguy.io:5432`
+- Prisma: use `prisma db push` (not `migrate dev`)
 - finance_thing user needs CREATEDB privilege for Prisma shadow database
 
 ## Dev Commands
-- `cd server && npm run dev` — start backend (requires tunnel or homelab network access)
-- `cd server && SEED_EMAIL=x SEED_PASSWORD=y npm run db:seed` — create initial user
+- `npm run dev` — from repo root, starts backend (3000) + frontend (5173) together via concurrently. Vite proxies `/api` → backend. Open http://localhost:5173
+- `npm run seed` (root) or `cd server && SEED_EMAIL=x SEED_PASSWORD=y npm run db:seed` — create initial user
+- `npm run build` (root) — build client then server
+- `npm run install:all` (root) — install root + server + client deps
 - `cd server && npx tsc --noEmit` — type check without building
-- Override DB for tunnel: `DATABASE_URL="postgresql://finance_thing:<pw>@localhost:15432/finance_thing" npx prisma ...`
 
 ## Project Structure
 - `server/` — Node.js + Express + TypeScript backend
-- `client/` — React + Vite frontend (not yet built)
+- `client/` — React + Vite + TypeScript frontend (Vite builds into `server/public/` for prod static serving)
 - Single Docker container serves both in production
 - External Postgres — not included in docker-compose
 
