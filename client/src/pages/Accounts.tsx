@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from '../api/client'
 import type { Account, AccountKind, Holding, Institution, TrackingMode } from '../api/types'
 import { Card, Empty, Field, Loading, Modal, SectionHead } from '../components/ui'
+import { PlaidConnect } from '../components/PlaidConnect'
 import { dateLabel, money } from '../lib/format'
 
 const KIND_LABELS: Record<AccountKind, string> = {
@@ -74,6 +75,9 @@ export function Accounts() {
       <p className="page-sub num">
         {money(total)} across {accounts.data?.length ?? 0} accounts{unvested > 0 ? ` · ${money(unvested)} unvested` : ''}
       </p>
+
+      <SectionHead title="Linked banks (Plaid)" />
+      <PlaidConnect />
 
       <SectionHead
         title="Your accounts"
