@@ -3,8 +3,9 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api, ApiError } from '../api/client'
 import type { FilingStatus, ManagedUser, Settings } from '../api/types'
 import { useAuth } from '../auth/AuthContext'
-import { Card, Field, Loading, SectionHead } from '../components/ui'
+import { Card, Field, Loading, Modal, SectionHead } from '../components/ui'
 import { dateLabel } from '../lib/format'
+import { PASSWORD_RULES, validatePassword } from '../lib/password'
 
 export function SettingsPage() {
   const qc = useQueryClient()
@@ -77,6 +78,8 @@ export function SettingsPage() {
         </button>
       </Card>
 
+      <ChangePasswordSection />
+
       <p className="dim" style={{ marginTop: 18, fontSize: 13 }}>
         Connect banks via Plaid on the <strong>Accounts</strong> page.
       </p>
@@ -91,6 +94,70 @@ export function SettingsPage() {
   )
 }
 
+function PasswordInput({ value, onChange, autoComplete }: { value: string; onChange: (v: string) => void; autoComplete?: string }) {
+  const [show, setShow] = useState(false)
+  return (
+    <div style={{ position: 'relative' }}>
+      <input
+        className="input"
+        type={show ? 'text' : 'password'}
+        autoComplete={autoComplete}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        style={{ paddingRight: 52 }}
+        required
+      />
+      <button
+        type="button"
+        className="iconbtn"
+        onClick={() => setShow((s) => !s)}
+        style={{ position: 'absolute', right: 6, top: '50%', transform: 'translateY(-50%)', fontSize: 12 }}
+      >
+        {show ? 'hide' : 'show'}
+      </button>
+    </div>
+  )
+}
+
+function ChangePasswordSection() {
+  const [current, setCurrent] = useState('')
+  const [next, setNext] = useState('')
+  const [confirm, setConfirm] = useState('')
+  const [error, setError] = useState<string | null>(null)
+
+  const change = useMutation({
+    mutationFn: () => api.post('/api/auth/change-password', { currentPassword: current, newPassword: next }),
+    onSuccess: () => { setCurrent(''); setNext(''); setConfirm(''); setError(null) },
+    onError: (e) => setError(e instanceof ApiError ? e.message : 'Could not change password'),
+  })
+
+  function submit(e: FormEvent) {
+    e.preventDefault()
+    setError(null)
+    const policy = validatePassword(next)
+    if (policy) { setError(policy); return }
+    if (next !== confirm) { setError('New passwords do not match'); return }
+    change.mutate()
+  }
+
+  return (
+    <>
+      <SectionHead title="Password" />
+      <form className="card" onSubmit={submit} style={{ maxWidth: 460 }}>
+        <Field label="Current password"><PasswordInput value={current} onChange={setCurrent} autoComplete="current-password" /></Field>
+        <Field label="New password"><PasswordInput value={next} onChange={setNext} autoComplete="new-password" /></Field>
+        <Field label="Confirm new password"><PasswordInput value={confirm} onChange={setConfirm} autoComplete="new-password" /></Field>
+        <p className="dim" style={{ fontSize: 12, margin: '-6px 0 12px' }}>{PASSWORD_RULES}</p>
+        {error && <div className="error-text">{error}</div>}
+        {change.isSuccess && <div className="dim">Password updated.</div>}
+        <button className="btn" type="submit" disabled={change.isPending} style={{ marginTop: 4 }}>
+          {change.isPending ? 'Updating…' : 'Change password'}
+        </button>
+      </form>
+    </>
+  )
+}
+
 function UsersSection() {
   const qc = useQueryClient()
   const users = useQuery({ queryKey: ['users'], queryFn: () => api.get<ManagedUser[]>('/api/users') })
@@ -99,6 +166,7 @@ function UsersSection() {
   const [password, setPassword] = useState('')
   const [isAdmin, setIsAdmin] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [resetting, setResetting] = useState<ManagedUser | null>(null)
 
   const create = useMutation({
     mutationFn: () => api.post('/api/users', { email, password, isAdmin }),
@@ -120,6 +188,8 @@ function UsersSection() {
   function submit(e: FormEvent) {
     e.preventDefault()
     setError(null)
+    const policy = validatePassword(password)
+    if (policy) { setError(policy); return }
     create.mutate()
   }
 
@@ -140,6 +210,7 @@ function UsersSection() {
                   </div>
                 </div>
                 <div className="right">
+                  <button className="btn ghost sm" onClick={() => setResetting(u)}>Reset password</button>
                   <button className="iconbtn" title="Delete user" onClick={() => remove.mutate(u.id)}>✕</button>
                 </div>
               </div>
@@ -152,8 +223,9 @@ function UsersSection() {
         <div className="stat-label" style={{ marginBottom: 12 }}>Add user</div>
         <div className="field-row">
           <Field label="Email"><input className="input" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required /></Field>
-          <Field label="Password"><input className="input" type="text" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={6} /></Field>
+          <Field label="Password"><PasswordInput value={password} onChange={setPassword} autoComplete="new-password" /></Field>
         </div>
+        <p className="dim" style={{ fontSize: 12, margin: '-6px 0 12px' }}>{PASSWORD_RULES}</p>
         <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14, cursor: 'pointer' }}>
           <input type="checkbox" checked={isAdmin} onChange={(e) => setIsAdmin(e.target.checked)} />
           <span>Grant admin access</span>
@@ -161,6 +233,40 @@ function UsersSection() {
         {error && <div className="error-text">{error}</div>}
         <button className="btn" type="submit" disabled={create.isPending}>{create.isPending ? 'Adding…' : 'Add user'}</button>
       </form>
+
+      {resetting && <ResetPasswordModal user={resetting} onClose={() => setResetting(null)} />}
     </>
+  )
+}
+
+function ResetPasswordModal({ user, onClose }: { user: ManagedUser; onClose: () => void }) {
+  const [pw, setPw] = useState('')
+  const [error, setError] = useState<string | null>(null)
+  const reset = useMutation({
+    mutationFn: () => api.post(`/api/users/${user.id}/reset-password`, { newPassword: pw }),
+    onSuccess: onClose,
+    onError: (e) => setError(e instanceof ApiError ? e.message : 'Could not reset password'),
+  })
+
+  function submit(e: FormEvent) {
+    e.preventDefault()
+    setError(null)
+    const policy = validatePassword(pw)
+    if (policy) { setError(policy); return }
+    reset.mutate()
+  }
+
+  return (
+    <Modal title={`Reset password — ${user.email}`} onClose={onClose}>
+      <form onSubmit={submit}>
+        <Field label="New password"><PasswordInput value={pw} onChange={setPw} autoComplete="new-password" /></Field>
+        <p className="dim" style={{ fontSize: 12, margin: '-6px 0 12px' }}>{PASSWORD_RULES}</p>
+        {error && <div className="error-text">{error}</div>}
+        <div className="modal-actions">
+          <button type="button" className="btn ghost" onClick={onClose}>Cancel</button>
+          <button type="submit" className="btn" disabled={reset.isPending}>{reset.isPending ? 'Resetting…' : 'Reset password'}</button>
+        </div>
+      </form>
+    </Modal>
   )
 }

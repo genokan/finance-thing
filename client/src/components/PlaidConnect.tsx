@@ -33,11 +33,25 @@ export function PlaidConnect() {
     },
   })
 
+  // OAuth banks redirect back to PLAID_REDIRECT_URI with ?oauth_state_id=…; we
+  // resume Link with the original token (persisted) + the received redirect URI.
+  const isOAuthReturn = typeof window !== 'undefined' && window.location.search.includes('oauth_state_id')
+
   const { open, ready } = usePlaidLink({
     token: linkToken,
-    onSuccess: (publicToken, metadata) =>
-      exchange.mutate({ publicToken, institutionName: metadata.institution?.name ?? 'Bank' }),
+    receivedRedirectUri: isOAuthReturn ? window.location.href : undefined,
+    onSuccess: (publicToken, metadata) => {
+      localStorage.removeItem('plaid_link_token')
+      exchange.mutate({ publicToken, institutionName: metadata.institution?.name ?? 'Bank' })
+    },
   })
+
+  useEffect(() => {
+    if (isOAuthReturn) {
+      const stored = localStorage.getItem('plaid_link_token')
+      if (stored) setLinkToken(stored)
+    }
+  }, [isOAuthReturn])
 
   useEffect(() => {
     if (linkToken && ready) open()
@@ -47,6 +61,7 @@ export function PlaidConnect() {
     setStatus(null)
     try {
       const { linkToken: token } = await api.get<{ linkToken: string }>('/api/plaid/link-token')
+      localStorage.setItem('plaid_link_token', token)
       setLinkToken(token)
     } catch {
       setStatus('Could not start Plaid Link. Check the Plaid credentials on the server.')

@@ -4,6 +4,7 @@ import { z } from 'zod'
 import { prisma } from '../lib/prisma'
 import { validate } from '../middleware/validate'
 import { requireAdmin } from '../middleware/auth'
+import { passwordSchema } from '../lib/password'
 
 export const usersRouter = Router()
 
@@ -12,9 +13,11 @@ usersRouter.use(requireAdmin)
 
 const createUserSchema = z.object({
   email: z.string().email(),
-  password: z.string().min(6),
+  password: passwordSchema,
   isAdmin: z.boolean().default(false),
 })
+
+const resetPasswordSchema = z.object({ newPassword: passwordSchema })
 
 usersRouter.get('/', async (_req, res) => {
   const users = await prisma.user.findMany({
@@ -36,6 +39,19 @@ usersRouter.post('/', validate(createUserSchema), async (req, res) => {
     select: { id: true, email: true, isAdmin: true, createdAt: true },
   })
   res.status(201).json(user)
+})
+
+usersRouter.post('/:id/reset-password', validate(resetPasswordSchema), async (req, res) => {
+  const { newPassword } = req.body as z.infer<typeof resetPasswordSchema>
+  try {
+    await prisma.user.update({
+      where: { id: req.params.id as string },
+      data: { passwordHash: await bcrypt.hash(newPassword, 12) },
+    })
+    res.json({ ok: true })
+  } catch {
+    res.status(404).json({ error: 'User not found' })
+  }
 })
 
 usersRouter.delete('/:id', async (req, res) => {

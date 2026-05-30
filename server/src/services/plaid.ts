@@ -26,12 +26,16 @@ function mapKind(subtype: string | null | undefined): AccountKind {
 }
 
 export async function createLinkToken(userId: string): Promise<string> {
+  // OAuth banks require a redirect URI that is also registered in the Plaid
+  // dashboard. Optional in sandbox; required for OAuth institutions in production.
+  const redirectUri = process.env.PLAID_REDIRECT_URI
   const res = await client().linkTokenCreate({
     user: { client_user_id: userId },
     client_name: 'finance-thing',
     products: [Products.Assets],
     country_codes: [CountryCode.Us],
     language: 'en',
+    ...(redirectUri ? { redirect_uri: redirectUri } : {}),
   })
   return res.data.link_token
 }
