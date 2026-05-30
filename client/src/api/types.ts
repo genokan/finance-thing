@@ -128,4 +128,12 @@ export interface SnapshotListItem {
 export interface Settings {
   email: string
   benchmarkRate: string | null
+  isAdmin: boolean
+}
+
+export interface ManagedUser {
+  id: string
+  email: string
+  isAdmin: boolean
+  createdAt: string
 }

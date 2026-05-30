@@ -8,7 +8,7 @@ export const settingsRouter = Router()
 const settingsSchema = z.object({ benchmarkRate: z.coerce.number().nonnegative().max(100).optional() })
 
 settingsRouter.get('/', async (req, res) => {
-  const user = await prisma.user.findUnique({ where: { id: req.userId }, select: { email: true, benchmarkRate: true } })
+  const user = await prisma.user.findUnique({ where: { id: req.userId }, select: { email: true, benchmarkRate: true, isAdmin: true } })
   if (!user) { res.status(404).json({ error: 'Not found' }); return }
   res.json(user)
 })

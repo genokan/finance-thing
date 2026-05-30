@@ -1,10 +1,11 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type FormEvent } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { usePlaidLink } from 'react-plaid-link'
-import { api } from '../api/client'
-import type { Settings } from '../api/types'
+import { api, ApiError } from '../api/client'
+import type { ManagedUser, Settings } from '../api/types'
 import { useAuth } from '../auth/AuthContext'
 import { Card, Field, Loading, SectionHead } from '../components/ui'
+import { dateLabel } from '../lib/format'
 
 export function SettingsPage() {
   const qc = useQueryClient()
@@ -58,6 +59,8 @@ export function SettingsPage() {
 
       <SectionHead title="Linked accounts" />
       <PlaidSection />
+
+      {settings.data?.isAdmin && <UsersSection />}
 
       <SectionHead title="Account" />
       <Card>
@@ -129,5 +132,91 @@ function PlaidSection() {
       </div>
       {status && <div className="dim" style={{ marginTop: 10 }}>{status}</div>}
     </Card>
+  )
+}
+
+function UsersSection() {
+  const qc = useQueryClient()
+  const users = useQuery({ queryKey: ['users'], queryFn: () => api.get<ManagedUser[]>('/api/users') })
+
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [isAdmin, setIsAdmin] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const create = useMutation({
+    mutationFn: () => api.post('/api/users', { email, password, isAdmin }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['users'] })
+      setEmail('')
+      setPassword('')
+      setIsAdmin(false)
+      setError(null)
+    },
+    onError: (e) => setError(e instanceof ApiError ? e.message : 'Could not create user'),
+  })
+
+  const remove = useMutation({
+    mutationFn: (id: string) => api.del(`/api/users/${id}`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['users'] }),
+    onError: (e) => setError(e instanceof ApiError ? e.message : 'Could not delete user'),
+  })
+
+  function submit(e: FormEvent) {
+    e.preventDefault()
+    setError(null)
+    create.mutate()
+  }
+
+  return (
+    <>
+      <SectionHead title="Users" />
+      <Card>
+        {users.isLoading ? (
+          <div className="dim">Loading…</div>
+        ) : (
+          <div className="list">
+            {(users.data ?? []).map((u) => (
+              <div className="row" key={u.id}>
+                <div className="main">
+                  <div className="name">{u.email}</div>
+                  <div className="meta">
+                    {u.isAdmin ? <span className="badge warn">admin</span> : <span className="badge neutral">user</span>}{' '}
+                    · added {dateLabel(u.createdAt)}
+                  </div>
+                </div>
+                <div className="right">
+                  <button className="iconbtn" title="Delete user" onClick={() => remove.mutate(u.id)}>
+                    ✕
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </Card>
+
+      <form className="card" style={{ marginTop: 14 }} onSubmit={submit}>
+        <div className="stat-label" style={{ marginBottom: 12 }}>
+          Add user
+        </div>
+        <div className="field-row">
+          <Field label="Email">
+            <input className="input" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
+          </Field>
+          <Field label="Password">
+            <input className="input" type="text" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={6} />
+          </Field>
+        </div>
+        <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14, cursor: 'pointer' }}>
+          <input type="checkbox" checked={isAdmin} onChange={(e) => setIsAdmin(e.target.checked)} />
+          <span>Grant admin access</span>
+        </label>
+        {error && <div className="error-text">{error}</div>}
+        <button className="btn" type="submit" disabled={create.isPending}>
+          {create.isPending ? 'Adding…' : 'Add user'}
+        </button>
+      </form>
+    </>
   )
 }

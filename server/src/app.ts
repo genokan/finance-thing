@@ -15,6 +15,7 @@ import { debtsRouter } from './routes/debts'
 import { snapshotsRouter } from './routes/snapshots'
 import { insightsRouter } from './routes/insights'
 import { settingsRouter } from './routes/settings'
+import { usersRouter } from './routes/users'
 import { plaidRouter } from './routes/plaid'
 import { globalRateLimiter } from './middleware/rateLimiter'
 import { authenticate } from './middleware/auth'
@@ -47,6 +48,7 @@ export function createApp() {
   app.use('/api/snapshots', snapshotsRouter)
   app.use('/api/insights', insightsRouter)
   app.use('/api/settings', settingsRouter)
+  app.use('/api/users', usersRouter)
   app.use('/api/plaid', plaidRouter)
 
   // Unknown /api routes should 404 as JSON, never fall through to the SPA.

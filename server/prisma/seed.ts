@@ -7,10 +7,12 @@ async function main() {
   const email = process.env.SEED_EMAIL
   const password = process.env.SEED_PASSWORD
   if (!email || !password) throw new Error('Set SEED_EMAIL and SEED_PASSWORD before seeding')
+  // The seeded user is the bootstrap admin (idempotent — ensures isAdmin on re-run).
   const existing = await prisma.user.findUnique({ where: { email } })
-  if (existing) { console.log(`User ${email} already exists — skipping`); return }
-  const user = await prisma.user.create({ data: { email, passwordHash: await bcrypt.hash(password, 12) } })
-  console.log(`Created user: ${user.email} (${user.id})`)
+  const user = existing
+    ? await prisma.user.update({ where: { email }, data: { isAdmin: true } })
+    : await prisma.user.create({ data: { email, passwordHash: await bcrypt.hash(password, 12), isAdmin: true } })
+  console.log(`${existing ? 'Ensured admin' : 'Created admin user'}: ${user.email} (${user.id})`)
 
   // Seed a sensible default set of expense categories (global, idempotent).
   const defaults: { name: string; type: 'ESSENTIAL' | 'DISCRETIONARY' }[] = [
