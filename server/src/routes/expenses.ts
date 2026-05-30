@@ -10,20 +10,37 @@ export const expensesRouter = Router()
 const expenseSchema = z.object({
   name: z.string().min(1).max(200),
   amount: z.coerce.number().positive(),
+  kind: z.enum(['RECURRING', 'ONE_TIME']).default('RECURRING'),
   intervalCount: z.coerce.number().int().positive().default(1),
   intervalUnit: z.enum(['DAY', 'WEEK', 'MONTH', 'YEAR']).default('MONTH'),
-  categoryId: z.string().cuid(),
+  dueDate: z.coerce.date().optional(),
+  categoryId: z.string().cuid().optional(),
   notes: z.string().optional(),
   expiresAt: z.coerce.date().optional(),
   renewsAt: z.coerce.date().optional(),
 })
 
-function withMonthly(e: { amount: unknown; intervalCount: number; intervalUnit: IntervalUnit; [k: string]: unknown }) {
-  return { ...e, monthlyEquivalent: Math.round(toMonthlyEquivalent(Number(e.amount), e.intervalCount, e.intervalUnit) * 100) / 100 }
+// monthlyEquivalent only applies to RECURRING items; ONE_TIME items have a dueDate.
+function withMonthly(e: {
+  amount: unknown
+  kind: string
+  intervalCount: number
+  intervalUnit: IntervalUnit
+  [k: string]: unknown
+}) {
+  const monthlyEquivalent =
+    e.kind === 'RECURRING'
+      ? Math.round(toMonthlyEquivalent(Number(e.amount), e.intervalCount, e.intervalUnit) * 100) / 100
+      : 0
+  return { ...e, monthlyEquivalent }
 }
 
 expensesRouter.get('/', async (req, res) => {
-  const items = await prisma.expenseItem.findMany({ where: { userId: req.userId, isActive: true }, include: { category: true }, orderBy: { amount: 'desc' } })
+  const items = await prisma.expenseItem.findMany({
+    where: { userId: req.userId, isActive: true },
+    include: { category: true },
+    orderBy: { amount: 'desc' },
+  })
   res.json(items.map(withMonthly))
 })
 
@@ -35,17 +52,23 @@ expensesRouter.post('/', validate(expenseSchema), async (req, res) => {
 
 expensesRouter.put('/:id', validate(expenseSchema), async (req, res) => {
   const data = req.body as z.infer<typeof expenseSchema>
-  const id = req.params.id as string
   try {
-    const item = await prisma.expenseItem.update({ where: { id, userId: req.userId }, data, include: { category: true } })
+    const item = await prisma.expenseItem.update({
+      where: { id: req.params.id as string, userId: req.userId },
+      data,
+      include: { category: true },
+    })
     res.json(withMonthly(item))
-  } catch { res.status(404).json({ error: 'Not found' }) }
+  } catch {
+    res.status(404).json({ error: 'Not found' })
+  }
 })
 
 expensesRouter.delete('/:id', async (req, res) => {
-  const id = req.params.id as string
   try {
-    await prisma.expenseItem.update({ where: { id, userId: req.userId }, data: { isActive: false } })
+    await prisma.expenseItem.update({ where: { id: req.params.id as string, userId: req.userId }, data: { isActive: false } })
     res.json({ ok: true })
-  } catch { res.status(404).json({ error: 'Not found' }) }
+  } catch {
+    res.status(404).json({ error: 'Not found' })
+  }
 })

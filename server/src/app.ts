@@ -10,7 +10,8 @@ import { expensesRouter } from './routes/expenses'
 import { categoriesRouter } from './routes/categories'
 import { institutionsRouter } from './routes/institutions'
 import { incomeRouter } from './routes/income'
-import { investmentsRouter } from './routes/investments'
+import { accountsRouter } from './routes/accounts'
+import { budgetsRouter } from './routes/budgets'
 import { debtsRouter } from './routes/debts'
 import { snapshotsRouter } from './routes/snapshots'
 import { insightsRouter } from './routes/insights'
@@ -43,7 +44,8 @@ export function createApp() {
   app.use('/api/categories', categoriesRouter)
   app.use('/api/institutions', institutionsRouter)
   app.use('/api/income', incomeRouter)
-  app.use('/api/investments', investmentsRouter)
+  app.use('/api/accounts', accountsRouter)
+  app.use('/api/budgets', budgetsRouter)
   app.use('/api/debts', debtsRouter)
   app.use('/api/snapshots', snapshotsRouter)
   app.use('/api/insights', insightsRouter)

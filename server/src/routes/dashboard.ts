@@ -1,46 +1,68 @@
 import { Router } from 'express'
 import { prisma } from '../lib/prisma'
 import { toMonthlyEquivalent } from '../lib/monthlyEquivalent'
+import { accountValue, accountUnvested, isCashKind } from '../lib/accountValue'
+import { estimateTax } from '../services/tax'
 import type { IntervalUnit } from '@prisma/client'
 
 export const dashboardRouter = Router()
 
+const r2 = (n: number) => Math.round(n * 100) / 100
+
 dashboardRouter.get('/', async (req, res) => {
   const uid = req.userId
-  const [expenses, incomeSources, investments, debts, snapshots] = await Promise.all([
+  const [user, accounts, expenses, incomeSources, debts, snapshots] = await Promise.all([
+    prisma.user.findUnique({ where: { id: uid }, select: { filingStatus: true, stateRate: true } }),
+    prisma.account.findMany({ where: { userId: uid, isActive: true }, include: { holdings: { where: { isActive: true } } } }),
     prisma.expenseItem.findMany({ where: { userId: uid, isActive: true }, include: { category: true } }),
-    prisma.incomeSource.findMany({ where: { userId: uid, isActive: true } }),
-    prisma.investmentAccount.findMany({ where: { userId: uid, isActive: true } }),
+    prisma.incomeSource.findMany({ where: { userId: uid, isActive: true }, include: { deductions: true } }),
     prisma.debt.findMany({ where: { userId: uid, isActive: true } }),
-    prisma.monthlySnapshot.findMany({ where: { userId: uid }, orderBy: [{ year: 'desc' }, { month: 'desc' }], take: 2, select: { year: true, month: true, netWorth: true } }),
+    prisma.monthlySnapshot.findMany({ where: { userId: uid }, orderBy: [{ year: 'desc' }, { month: 'desc' }], take: 2, select: { year: true, month: true, netWorth: true, liquidNetWorth: true } }),
   ])
 
-  const totalIncome = incomeSources.reduce((s, i) => s + Number(i.amount), 0)
-  const essential = expenses.filter(e => e.category.type === 'ESSENTIAL').reduce((s, e) => s + toMonthlyEquivalent(Number(e.amount), e.intervalCount, e.intervalUnit as IntervalUnit), 0)
-  const discretionary = expenses.filter(e => e.category.type === 'DISCRETIONARY').reduce((s, e) => s + toMonthlyEquivalent(Number(e.amount), e.intervalCount, e.intervalUnit as IntervalUnit), 0)
-  const debtPayments = debts.reduce((s, d) => s + Number(d.monthlyPayment), 0)
-  const liquidCash = investments.filter(a => ['SAVINGS','MONEY_MARKET','CHECKING'].includes(a.type)).reduce((s, a) => s + Number(a.currentValue), 0)
-  const vestedInvestments = investments.filter(a => !['SAVINGS','MONEY_MARKET','CHECKING'].includes(a.type)).reduce((s, a) => s + Number(a.currentValue), 0)
-  const unvestedRSUs = investments.filter(a => a.type === 'RSU').reduce((s, a) => s + Number(a.unvestedValue ?? 0), 0)
+  const defaults = { filingStatus: user?.filingStatus ?? null, stateRate: user?.stateRate != null ? Number(user.stateRate) : null }
+
+  const liquidCash = accounts.filter((a) => isCashKind(a.kind)).reduce((s, a) => s + accountValue(a), 0)
+  const vestedInvestments = accounts.filter((a) => !isCashKind(a.kind)).reduce((s, a) => s + accountValue(a), 0)
+  const unvestedRSUs = accounts.reduce((s, a) => s + accountUnvested(a), 0)
   const totalDebtPrincipal = debts.reduce((s, d) => s + Number(d.principal), 0)
   const liquidNetWorth = liquidCash + vestedInvestments - totalDebtPrincipal
   const totalNetWorth = liquidNetWorth + unvestedRSUs
-  const totalExpenses = essential + discretionary + debtPayments
+
+  const grossMonthly = incomeSources.reduce((s, i) => s + estimateTax(i, defaults).grossAnnual / 12, 0)
+  const netMonthly = incomeSources.reduce((s, i) => s + estimateTax(i, defaults).netMonthly, 0)
+
+  const monthlyOf = (amount: unknown, c: number, u: IntervalUnit) => toMonthlyEquivalent(Number(amount), c, u)
+  const recurring = expenses.filter((e) => e.kind === 'RECURRING')
+  const essential = recurring.filter((e) => e.category?.bucket === 'ESSENTIAL').reduce((s, e) => s + monthlyOf(e.amount, e.intervalCount, e.intervalUnit), 0)
+  const discretionary = recurring.filter((e) => e.category?.bucket === 'DISCRETIONARY').reduce((s, e) => s + monthlyOf(e.amount, e.intervalCount, e.intervalUnit), 0)
+  const uncategorized = recurring.filter((e) => !e.category).reduce((s, e) => s + monthlyOf(e.amount, e.intervalCount, e.intervalUnit), 0)
+  const debtPayments = debts.reduce((s, d) => s + Number(d.monthlyPayment), 0)
+  const totalExpenses = essential + discretionary + uncategorized + debtPayments
 
   const now = new Date()
-  const ninetyOut = new Date(now.getTime() + 90 * 24 * 60 * 60 * 1000)
+  const ninetyOut = new Date(now.getTime() + 90 * 86400000)
   const upcomingAlerts = expenses
-    .filter(e => (e.expiresAt && e.expiresAt <= ninetyOut) || (e.renewsAt && e.renewsAt <= ninetyOut))
-    .map(e => ({ id: e.id, name: e.name, expiresAt: e.expiresAt, renewsAt: e.renewsAt }))
+    .filter((e) => (e.expiresAt && e.expiresAt <= ninetyOut) || (e.renewsAt && e.renewsAt <= ninetyOut) || (e.kind === 'ONE_TIME' && e.dueDate && e.dueDate <= ninetyOut))
+    .map((e) => ({ id: e.id, name: e.name, kind: e.kind, dueDate: e.dueDate, expiresAt: e.expiresAt, renewsAt: e.renewsAt }))
 
-  const r = (n: number) => Math.round(n * 100) / 100
+  const denom = netMonthly > 0 ? netMonthly : grossMonthly
   res.json({
-    totalIncome, totalExpenses: r(totalExpenses), essentialExpenses: r(essential), discretionaryExpenses: r(discretionary), debtPayments: r(debtPayments),
-    liquidNetWorth: r(liquidNetWorth), totalNetWorth: r(totalNetWorth), liquidCash: r(liquidCash), vestedInvestments: r(vestedInvestments), unvestedRSUs: r(unvestedRSUs),
+    liquidNetWorth: r2(liquidNetWorth),
+    totalNetWorth: r2(totalNetWorth),
+    liquidCash: r2(liquidCash),
+    vestedInvestments: r2(vestedInvestments),
+    unvestedRSUs: r2(unvestedRSUs),
+    grossMonthlyIncome: r2(grossMonthly),
+    netMonthlyIncome: r2(netMonthly),
+    totalExpenses: r2(totalExpenses),
+    essentialExpenses: r2(essential),
+    discretionaryExpenses: r2(discretionary),
+    debtPayments: r2(debtPayments),
     fiftyThirtyTwenty: {
-      needsPercent: totalIncome > 0 ? Math.round(essential / totalIncome * 1000) / 10 : 0,
-      wantsPercent: totalIncome > 0 ? Math.round(discretionary / totalIncome * 1000) / 10 : 0,
-      savingsPercent: totalIncome > 0 ? Math.round((totalIncome - totalExpenses) / totalIncome * 1000) / 10 : 0,
+      needsPercent: denom > 0 ? r2(((essential + debtPayments) / denom) * 100) : 0,
+      wantsPercent: denom > 0 ? r2((discretionary / denom) * 100) : 0,
+      savingsPercent: denom > 0 ? r2(((denom - totalExpenses) / denom) * 100) : 0,
     },
     recentSnapshots: snapshots,
     upcomingAlerts,
