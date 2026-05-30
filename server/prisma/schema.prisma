@@ -7,9 +7,19 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-enum CategoryType {
+// ---------- Enums ----------
+
+enum BudgetBucket {
   ESSENTIAL
   DISCRETIONARY
+  SAVINGS
+}
+
+enum CategoryScope {
+  EXPENSE
+  INCOME
+  DEBT
+  ANY
 }
 
 enum IntervalUnit {
@@ -19,161 +29,338 @@ enum IntervalUnit {
   YEAR
 }
 
-enum InvestmentType {
+enum ExpenseKind {
+  RECURRING
+  ONE_TIME
+}
+
+enum AccountKind {
+  CHECKING
+  SAVINGS
+  MONEY_MARKET
   BROKERAGE
   IRA
   ROTH_IRA
   PLAN_401K
   DEFINED_CONTRIBUTION
+  HSA
   RSU
-  SAVINGS
-  MONEY_MARKET
-  CHECKING
+  OTHER
 }
 
-enum DebtType {
+enum TrackingMode {
+  BALANCE
+  HOLDINGS
+}
+
+enum IncomeType {
+  W2
+  SELF_1099
+  OTHER
+}
+
+enum PayFrequency {
+  WEEKLY
+  BIWEEKLY
+  SEMIMONTHLY
+  MONTHLY
+  ANNUAL
+}
+
+enum TaxMode {
+  FLAT
+  BRACKET
+}
+
+enum FilingStatus {
+  SINGLE
+  MARRIED_JOINT
+  MARRIED_SEPARATE
+  HEAD_OF_HOUSEHOLD
+}
+
+enum DebtTerm {
   SHORT_TERM
   LONG_TERM
 }
 
-model User {
-  id            String              @id @default(cuid())
-  email         String              @unique
-  passwordHash  String
-  isAdmin       Boolean             @default(false)
-  benchmarkRate Decimal?            @db.Decimal(6, 4)
-  createdAt     DateTime            @default(now())
-  updatedAt     DateTime            @updatedAt
-  expenses      ExpenseItem[]
-  income        IncomeSource[]
-  investments   InvestmentAccount[]
-  debts         Debt[]
-  snapshots     MonthlySnapshot[]
+enum DebtKind {
+  CREDIT_CARD
+  CAR_LOAN
+  MORTGAGE
+  STUDENT_LOAN
+  PERSONAL
+  OTHER
 }
 
-model Category {
-  id       String        @id @default(cuid())
-  name     String        @unique
-  type     CategoryType
-  expenses ExpenseItem[]
+// ---------- Core ----------
+
+model User {
+  id            String         @id @default(cuid())
+  email         String         @unique
+  passwordHash  String
+  isAdmin       Boolean        @default(false)
+  benchmarkRate Decimal?       @db.Decimal(6, 4)
+  // User-level tax defaults (an IncomeSource may override)
+  filingStatus  FilingStatus?
+  stateRate     Decimal?       @db.Decimal(6, 4)
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  accounts   Account[]
+  categories Category[]
+  expenses   ExpenseItem[]
+  income     IncomeSource[]
+  debts      Debt[]
+  snapshots  MonthlySnapshot[]
 }
 
 model Institution {
-  id                 String              @id @default(cuid())
-  name               String              @unique
-  investmentAccounts InvestmentAccount[]
-  debts              Debt[]
-  plaidItems         PlaidItem[]
+  id         String      @id @default(cuid())
+  name       String      @unique
+  accounts   Account[]
+  debts      Debt[]
+  plaidItems PlaidItem[]
 }
 
-model ExpenseItem {
-  id            String            @id @default(cuid())
+// ---------- Accounts & holdings ----------
+
+model Account {
+  id            String       @id @default(cuid())
   userId        String
-  user          User              @relation(fields: [userId], references: [id])
+  user          User         @relation(fields: [userId], references: [id])
   name          String
-  amount        Decimal           @db.Decimal(12, 2)
-  intervalCount Int               @default(1)
-  intervalUnit  IntervalUnit      @default(MONTH)
-  categoryId    String
-  category      Category          @relation(fields: [categoryId], references: [id])
-  notes         String?
-  expiresAt     DateTime?
-  renewsAt      DateTime?
-  isActive      Boolean           @default(true)
-  createdAt     DateTime          @default(now())
-  updatedAt     DateTime          @updatedAt
-  snapshots     ExpenseSnapshot[]
+  kind          AccountKind
+  trackingMode  TrackingMode @default(BALANCE)
+  // Used when trackingMode = BALANCE. With HOLDINGS, value = sum(holdings.value).
+  balance       Decimal      @default(0) @db.Decimal(14, 2)
+  institutionId String?
+  institution   Institution? @relation(fields: [institutionId], references: [id])
+  plaidItemId   String?
+  plaidItem     PlaidItem?   @relation(fields: [plaidItemId], references: [id], onDelete: SetNull)
+  isActive      Boolean      @default(true)
+  lastUpdatedAt DateTime?
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+
+  holdings      Holding[]
+  distributions IncomeDistribution[]
+  deductions    IncomeDeduction[]
+  snapshots     AccountSnapshot[]
 
   @@index([userId])
 }
 
-model IncomeSource {
-  id            String               @id @default(cuid())
+model Holding {
+  id             String   @id @default(cuid())
+  accountId      String
+  account        Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  label          String
+  ticker         String?
+  shares         Decimal? @db.Decimal(18, 6)
+  value          Decimal  @db.Decimal(14, 2)
+  costBasis      Decimal? @db.Decimal(14, 2)
+  // RSU support
+  vestedShares   Decimal? @db.Decimal(18, 6)
+  unvestedShares Decimal? @db.Decimal(18, 6)
+  unvestedValue  Decimal? @db.Decimal(14, 2)
+  isActive       Boolean  @default(true)
+  lastUpdatedAt  DateTime?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([accountId])
+}
+
+// ---------- Flexible categories + budgets ----------
+
+model Category {
+  id           String        @id @default(cuid())
+  userId       String
+  user         User          @relation(fields: [userId], references: [id])
+  name         String
+  parentId     String?
+  parent       Category?     @relation("CategoryTree", fields: [parentId], references: [id], onDelete: SetNull)
+  children     Category[]    @relation("CategoryTree")
+  bucket       BudgetBucket  @default(ESSENTIAL)
+  monthlyBudget Decimal?     @db.Decimal(12, 2)
+  appliesTo    CategoryScope @default(ANY)
+  isActive     Boolean       @default(true)
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  expenses ExpenseItem[]
+  debts    Debt[]
+
+  @@index([userId])
+  @@index([parentId])
+}
+
+// ---------- Expenses ----------
+
+model ExpenseItem {
+  id            String       @id @default(cuid())
   userId        String
-  user          User                 @relation(fields: [userId], references: [id])
+  user          User         @relation(fields: [userId], references: [id])
   name          String
-  amount        Decimal              @db.Decimal(12, 2)
-  intervalCount Int                  @default(1)
-  intervalUnit  IntervalUnit         @default(MONTH)
-  isActive      Boolean              @default(true)
-  createdAt     DateTime             @default(now())
-  updatedAt     DateTime             @updatedAt
+  amount        Decimal      @db.Decimal(12, 2)
+  kind          ExpenseKind  @default(RECURRING)
+  intervalCount Int          @default(1)
+  intervalUnit  IntervalUnit @default(MONTH)
+  dueDate       DateTime?    // for ONE_TIME planned expenses
+  categoryId    String?
+  category      Category?    @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  notes         String?
+  expiresAt     DateTime?
+  renewsAt      DateTime?
+  isActive      Boolean      @default(true)
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+
+  snapshots ExpenseSnapshot[]
+
+  @@index([userId])
+}
+
+// ---------- Income + tax ----------
+
+model IncomeSource {
+  id               String       @id @default(cuid())
+  userId           String
+  user             User         @relation(fields: [userId], references: [id])
+  name             String
+  type             IncomeType   @default(W2)
+  grossAnnual      Decimal?     @db.Decimal(14, 2)
+  grossPerPaycheck Decimal?     @db.Decimal(14, 2)
+  payFrequency     PayFrequency @default(BIWEEKLY)
+  taxMode          TaxMode      @default(FLAT)
+  flatEffectiveRate Decimal?    @db.Decimal(6, 4)
+  filingStatus     FilingStatus?
+  stateRate        Decimal?     @db.Decimal(6, 4)
+  isActive         Boolean      @default(true)
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+
+  deductions    IncomeDeduction[]
   distributions IncomeDistribution[]
   snapshots     IncomeSnapshot[]
 
   @@index([userId])
 }
 
+model IncomeDeduction {
+  id              String       @id @default(cuid())
+  incomeSourceId  String
+  incomeSource    IncomeSource @relation(fields: [incomeSourceId], references: [id], onDelete: Cascade)
+  name            String
+  amount          Decimal      @db.Decimal(12, 2)
+  preTax          Boolean      @default(true)
+  linkedAccountId String?
+  linkedAccount   Account?     @relation(fields: [linkedAccountId], references: [id], onDelete: SetNull)
+
+  @@index([incomeSourceId])
+}
+
 model IncomeDistribution {
   id             String       @id @default(cuid())
   incomeSourceId String
   incomeSource   IncomeSource @relation(fields: [incomeSourceId], references: [id], onDelete: Cascade)
-  accountName    String
+  accountId      String?
+  account        Account?     @relation(fields: [accountId], references: [id], onDelete: SetNull)
   amount         Decimal      @db.Decimal(12, 2)
 
   @@index([incomeSourceId])
 }
 
-model InvestmentAccount {
-  id             String               @id @default(cuid())
-  userId         String
-  user           User                 @relation(fields: [userId], references: [id])
-  name           String
-  type           InvestmentType
-  ticker         String?
-  shares         Decimal?             @db.Decimal(18, 6)
-  vestedShares   Decimal?             @db.Decimal(18, 6)
-  unvestedShares Decimal?             @db.Decimal(18, 6)
-  unvestedValue  Decimal?             @db.Decimal(12, 2)
-  institutionId  String?
-  institution    Institution?         @relation(fields: [institutionId], references: [id])
-  currentValue   Decimal              @db.Decimal(12, 2)
-  isActive       Boolean              @default(true)
-  lastUpdatedAt  DateTime?
-  createdAt      DateTime             @default(now())
-  updatedAt      DateTime             @updatedAt
-  snapshots      InvestmentSnapshot[]
-
-  @@index([userId])
-}
+// ---------- Debt ----------
 
 model Debt {
-  id             String         @id @default(cuid())
+  id             String       @id @default(cuid())
   userId         String
-  user           User           @relation(fields: [userId], references: [id])
+  user           User         @relation(fields: [userId], references: [id])
   name           String
-  type           DebtType
-  principal      Decimal        @db.Decimal(12, 2)
-  monthlyPayment Decimal        @db.Decimal(12, 2)
-  apr            Decimal        @db.Decimal(6, 4)
+  term           DebtTerm
+  kind           DebtKind     @default(OTHER)
+  categoryId     String?
+  category       Category?    @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  principal      Decimal      @db.Decimal(14, 2)
+  monthlyPayment Decimal      @db.Decimal(12, 2)
+  apr            Decimal      @db.Decimal(6, 4)
   institutionId  String?
-  institution    Institution?   @relation(fields: [institutionId], references: [id])
+  institution    Institution? @relation(fields: [institutionId], references: [id])
   payoffDate     DateTime?
-  promoApr       Decimal?       @db.Decimal(6, 4)
+  // 0% promo is orthogonal to term
+  isZeroPromo    Boolean      @default(false)
+  promoEndsAt    DateTime?
+  postPromoApr   Decimal?     @db.Decimal(6, 4)
   notes          String?
-  isActive       Boolean        @default(true)
-  createdAt      DateTime       @default(now())
-  updatedAt      DateTime       @updatedAt
-  snapshots      DebtSnapshot[]
+  isActive       Boolean      @default(true)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  snapshots DebtSnapshot[]
 
   @@index([userId])
 }
 
+// ---------- App settings (admin-managed) ----------
+
+model AppSetting {
+  id        String   @id @default(cuid())
+  key       String   @unique
+  value     String
+  updatedAt DateTime @updatedAt
+}
+
+// ---------- Plaid ----------
+
+model PlaidItem {
+  id            String      @id @default(cuid())
+  userId        String
+  institutionId String
+  institution   Institution @relation(fields: [institutionId], references: [id])
+  accessToken   String // AES-256-GCM encrypted at application layer — never plaintext
+  itemId        String      @unique
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  accounts Account[]
+
+  @@index([userId])
+}
+
+// ---------- Snapshots (time series) ----------
+
 model MonthlySnapshot {
-  id          String               @id @default(cuid())
-  userId      String
-  user        User                 @relation(fields: [userId], references: [id])
-  year        Int
-  month       Int
-  netWorth    Decimal              @db.Decimal(12, 2)
-  createdAt   DateTime             @default(now())
-  expenses    ExpenseSnapshot[]
-  income      IncomeSnapshot[]
-  investments InvestmentSnapshot[]
-  debts       DebtSnapshot[]
+  id              String   @id @default(cuid())
+  userId          String
+  user            User     @relation(fields: [userId], references: [id])
+  year            Int
+  month           Int
+  netWorth        Decimal  @db.Decimal(14, 2)
+  liquidNetWorth  Decimal? @db.Decimal(14, 2)
+  createdAt       DateTime @default(now())
+
+  accounts AccountSnapshot[]
+  expenses ExpenseSnapshot[]
+  income   IncomeSnapshot[]
+  debts    DebtSnapshot[]
 
   @@unique([userId, year, month])
   @@index([userId])
+}
+
+model AccountSnapshot {
+  id         String          @id @default(cuid())
+  snapshotId String
+  snapshot   MonthlySnapshot @relation(fields: [snapshotId], references: [id], onDelete: Cascade)
+  accountId  String?
+  account    Account?        @relation(fields: [accountId], references: [id], onDelete: SetNull)
+  value      Decimal         @db.Decimal(14, 2)
+  unvestedValue Decimal?     @db.Decimal(14, 2)
+
+  @@index([snapshotId])
+  @@index([accountId])
 }
 
 model ExpenseSnapshot {
@@ -194,23 +381,11 @@ model IncomeSnapshot {
   snapshot       MonthlySnapshot @relation(fields: [snapshotId], references: [id], onDelete: Cascade)
   incomeSourceId String?
   incomeSource   IncomeSource?   @relation(fields: [incomeSourceId], references: [id], onDelete: SetNull)
-  amount         Decimal         @db.Decimal(12, 2)
+  grossAmount    Decimal         @db.Decimal(14, 2)
+  netAmount      Decimal?        @db.Decimal(14, 2)
 
   @@index([snapshotId])
   @@index([incomeSourceId])
-}
-
-model InvestmentSnapshot {
-  id                  String             @id @default(cuid())
-  snapshotId          String
-  snapshot            MonthlySnapshot    @relation(fields: [snapshotId], references: [id], onDelete: Cascade)
-  investmentAccountId String?
-  investmentAccount   InvestmentAccount? @relation(fields: [investmentAccountId], references: [id], onDelete: SetNull)
-  value               Decimal            @db.Decimal(12, 2)
-  unvestedValue       Decimal?           @db.Decimal(12, 2)
-
-  @@index([snapshotId])
-  @@index([investmentAccountId])
 }
 
 model DebtSnapshot {
@@ -219,22 +394,9 @@ model DebtSnapshot {
   snapshot       MonthlySnapshot @relation(fields: [snapshotId], references: [id], onDelete: Cascade)
   debtId         String?
   debt           Debt?           @relation(fields: [debtId], references: [id], onDelete: SetNull)
-  principal      Decimal         @db.Decimal(12, 2)
+  principal      Decimal         @db.Decimal(14, 2)
   monthlyPayment Decimal         @db.Decimal(12, 2)
 
   @@index([snapshotId])
   @@index([debtId])
-}
-
-model PlaidItem {
-  id            String      @id @default(cuid())
-  userId        String
-  institutionId String
-  institution   Institution @relation(fields: [institutionId], references: [id])
-  accessToken   String      // AES-256-GCM encrypted at application layer — never stored or logged as plaintext
-  itemId        String      @unique
-  createdAt     DateTime    @default(now())
-  updatedAt     DateTime    @updatedAt
-
-  @@index([userId])
 }
