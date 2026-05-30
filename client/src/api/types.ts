@@ -1,120 +1,168 @@
 export type IntervalUnit = 'DAY' | 'WEEK' | 'MONTH' | 'YEAR'
-export type CategoryType = 'ESSENTIAL' | 'DISCRETIONARY'
-export type InvestmentType =
-  | 'BROKERAGE'
-  | 'IRA'
-  | 'ROTH_IRA'
-  | 'PLAN_401K'
-  | 'DEFINED_CONTRIBUTION'
-  | 'RSU'
-  | 'SAVINGS'
-  | 'MONEY_MARKET'
-  | 'CHECKING'
-export type DebtType = 'SHORT_TERM' | 'LONG_TERM'
-
-export interface Category {
-  id: string
-  name: string
-  type: CategoryType
-}
+export type BudgetBucket = 'ESSENTIAL' | 'DISCRETIONARY' | 'SAVINGS'
+export type CategoryScope = 'EXPENSE' | 'INCOME' | 'DEBT' | 'ANY'
+export type ExpenseKind = 'RECURRING' | 'ONE_TIME'
+export type AccountKind =
+  | 'CHECKING' | 'SAVINGS' | 'MONEY_MARKET' | 'BROKERAGE' | 'IRA' | 'ROTH_IRA'
+  | 'PLAN_401K' | 'DEFINED_CONTRIBUTION' | 'HSA' | 'RSU' | 'OTHER'
+export type TrackingMode = 'BALANCE' | 'HOLDINGS'
+export type IncomeType = 'W2' | 'SELF_1099' | 'OTHER'
+export type PayFrequency = 'WEEKLY' | 'BIWEEKLY' | 'SEMIMONTHLY' | 'MONTHLY' | 'ANNUAL'
+export type TaxMode = 'FLAT' | 'BRACKET'
+export type FilingStatus = 'SINGLE' | 'MARRIED_JOINT' | 'MARRIED_SEPARATE' | 'HEAD_OF_HOUSEHOLD'
+export type DebtTerm = 'SHORT_TERM' | 'LONG_TERM'
+export type DebtKind = 'CREDIT_CARD' | 'CAR_LOAN' | 'MORTGAGE' | 'STUDENT_LOAN' | 'PERSONAL' | 'OTHER'
 
 export interface Institution {
   id: string
   name: string
 }
 
+export interface Category {
+  id: string
+  name: string
+  parentId: string | null
+  bucket: BudgetBucket
+  monthlyBudget: string | null
+  appliesTo: CategoryScope
+}
+
+export interface Holding {
+  id: string
+  accountId: string
+  label: string
+  ticker: string | null
+  shares: string | null
+  value: string
+  costBasis: string | null
+  vestedShares: string | null
+  unvestedShares: string | null
+  unvestedValue: string | null
+}
+
+export interface Account {
+  id: string
+  name: string
+  kind: AccountKind
+  trackingMode: TrackingMode
+  balance: string
+  institutionId: string | null
+  institution: Institution | null
+  holdings: Holding[]
+  value: number
+  unvestedValue: number
+  lastUpdatedAt: string | null
+}
+
 export interface Expense {
   id: string
   name: string
   amount: string
+  kind: ExpenseKind
   intervalCount: number
   intervalUnit: IntervalUnit
-  categoryId: string
-  category: Category
+  dueDate: string | null
+  categoryId: string | null
+  category: Category | null
   notes: string | null
   expiresAt: string | null
   renewsAt: string | null
   monthlyEquivalent: number
 }
 
+export interface Deduction {
+  id?: string
+  name: string
+  amount: string
+  preTax: boolean
+  linkedAccountId?: string | null
+}
+
 export interface Distribution {
   id?: string
-  accountName: string
+  accountId: string | null
   amount: string
+  account?: Account | null
+}
+
+export interface TaxBreakdown {
+  mode: TaxMode
+  grossAnnual: number
+  federal: number
+  socialSecurity: number
+  medicare: number
+  state: number
+  preTaxDeductions: number
+  postTaxDeductions: number
+  netAnnual: number
+  netMonthly: number
+  effectiveRate: number
 }
 
 export interface IncomeSource {
   id: string
   name: string
-  amount: string
-  intervalCount: number
-  intervalUnit: IntervalUnit
+  type: IncomeType
+  grossAnnual: string | null
+  grossPerPaycheck: string | null
+  payFrequency: PayFrequency
+  taxMode: TaxMode
+  flatEffectiveRate: string | null
+  filingStatus: FilingStatus | null
+  stateRate: string | null
+  deductions: Deduction[]
   distributions: Distribution[]
-}
-
-export interface Investment {
-  id: string
-  name: string
-  type: InvestmentType
-  ticker: string | null
-  shares: string | null
-  vestedShares: string | null
-  unvestedShares: string | null
-  unvestedValue: string | null
-  institutionId: string | null
-  institution: Institution | null
-  currentValue: string
-  lastUpdatedAt: string | null
+  tax: TaxBreakdown
 }
 
 export interface Debt {
   id: string
   name: string
-  type: DebtType
+  term: DebtTerm
+  kind: DebtKind
+  categoryId: string | null
+  category: Category | null
   principal: string
   monthlyPayment: string
   apr: string
   institutionId: string | null
   institution: Institution | null
   payoffDate: string | null
-  promoApr: string | null
+  isZeroPromo: boolean
+  promoEndsAt: string | null
+  postPromoApr: string | null
   notes: string | null
 }
 
 export interface Dashboard {
-  totalIncome: number
-  totalExpenses: number
-  essentialExpenses: number
-  discretionaryExpenses: number
-  debtPayments: number
   liquidNetWorth: number
   totalNetWorth: number
   liquidCash: number
   vestedInvestments: number
   unvestedRSUs: number
+  grossMonthlyIncome: number
+  netMonthlyIncome: number
+  totalExpenses: number
+  essentialExpenses: number
+  discretionaryExpenses: number
+  debtPayments: number
   fiftyThirtyTwenty: { needsPercent: number; wantsPercent: number; savingsPercent: number }
-  recentSnapshots: { year: number; month: number; netWorth: string }[]
-  upcomingAlerts: { id: string; name: string; expiresAt: string | null; renewsAt: string | null }[]
+  recentSnapshots: { year: number; month: number; netWorth: string; liquidNetWorth: string | null }[]
+  upcomingAlerts: { id: string; name: string; kind: ExpenseKind; dueDate: string | null; expiresAt: string | null; renewsAt: string | null }[]
 }
 
 export interface Insights {
   benchmarkRate: number
-  debtAnalysis: {
-    id: string
-    name: string
-    apr: number
-    benchmark: number
-    opportunityCostPercent: number
-    verdict: 'PAY_OFF' | 'BALANCED' | 'KEEP'
-  }[]
-  emergencyFund: {
-    liquidCash: number
-    monthlyEssentialExpenses: number
-    monthsCovered: number
-    status: 'ADEQUATE' | 'MINIMUM' | 'LOW'
-  }
-  promoAlerts: { id: string; name: string; payoffDate: string; promoApr: number; daysRemaining: number }[]
+  debtAnalysis: { id: string; name: string; apr: number; benchmark: number; opportunityCostPercent: number; verdict: 'PAY_OFF' | 'BALANCED' | 'KEEP' }[]
+  emergencyFund: { liquidCash: number; monthlyEssentialExpenses: number; monthsCovered: number; status: 'ADEQUATE' | 'MINIMUM' | 'LOW' }
+  promoAlerts: { id: string; name: string; promoEndsAt: string; postPromoApr: number; daysRemaining: number }[]
   highAprDebts: { id: string; name: string; apr: number; principal: number }[]
+}
+
+export interface BudgetOverview {
+  totalMonthlyIncome: number
+  buckets: { bucket: BudgetBucket; actual: number; percentOfIncome: number }[]
+  categories: { id: string; name: string; parentId: string | null; bucket: BudgetBucket; monthlyBudget: number | null; actual: number }[]
 }
 
 export interface SnapshotListItem {
@@ -122,12 +170,15 @@ export interface SnapshotListItem {
   year: number
   month: number
   netWorth: string
+  liquidNetWorth: string | null
   createdAt: string
 }
 
 export interface Settings {
   email: string
   benchmarkRate: string | null
+  filingStatus: FilingStatus | null
+  stateRate: string | null
   isAdmin: boolean
 }
 

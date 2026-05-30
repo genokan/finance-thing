@@ -5,7 +5,8 @@ import { Login } from './pages/Login'
 import { Dashboard } from './pages/Dashboard'
 import { Expenses } from './pages/Expenses'
 import { Income } from './pages/Income'
-import { Investments } from './pages/Investments'
+import { Accounts } from './pages/Accounts'
+import { Budgets } from './pages/Budgets'
 import { DebtPage } from './pages/Debt'
 import { History } from './pages/History'
 import { SettingsPage } from './pages/Settings'
@@ -29,9 +30,10 @@ export function App() {
       <Route path="/login" element={<Navigate to="/" replace />} />
       <Route element={<Layout />}>
         <Route path="/" element={<Dashboard />} />
+        <Route path="/accounts" element={<Accounts />} />
         <Route path="/expenses" element={<Expenses />} />
+        <Route path="/budgets" element={<Budgets />} />
         <Route path="/income" element={<Income />} />
-        <Route path="/investments" element={<Investments />} />
         <Route path="/debt" element={<DebtPage />} />
         <Route path="/history" element={<History />} />
         <Route path="/settings" element={<SettingsPage />} />

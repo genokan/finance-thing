@@ -20,7 +20,7 @@ interface SnapshotDetail {
   year: number
   month: number
   netWorth: string
-  investments: { value: string }[]
+  accounts: { value: string }[]
   debts: { principal: string }[]
 }
 
@@ -49,7 +49,7 @@ export function History() {
       .map((d) => ({
         label: monthLabel(d.year, d.month),
         netWorth: Number(d.netWorth),
-        investments: d.investments.reduce((s, i) => s + Number(i.value), 0),
+        investments: d.accounts.reduce((s, a) => s + Number(a.value), 0),
         debt: d.debts.reduce((s, x) => s + Number(x.principal), 0),
       }))
   }, [details])

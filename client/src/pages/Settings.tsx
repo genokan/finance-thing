@@ -2,7 +2,7 @@ import { useEffect, useState, type FormEvent } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { usePlaidLink } from 'react-plaid-link'
 import { api, ApiError } from '../api/client'
-import type { ManagedUser, Settings } from '../api/types'
+import type { FilingStatus, ManagedUser, Settings } from '../api/types'
 import { useAuth } from '../auth/AuthContext'
 import { Card, Field, Loading, SectionHead } from '../components/ui'
 import { dateLabel } from '../lib/format'
@@ -13,15 +13,27 @@ export function SettingsPage() {
   const settings = useQuery({ queryKey: ['settings'], queryFn: () => api.get<Settings>('/api/settings') })
 
   const [rate, setRate] = useState('')
+  const [filingStatus, setFilingStatus] = useState<FilingStatus | ''>('')
+  const [statePct, setStatePct] = useState('')
   useEffect(() => {
-    if (settings.data) setRate(settings.data.benchmarkRate ?? '')
+    if (settings.data) {
+      setRate(settings.data.benchmarkRate ?? '')
+      setFilingStatus(settings.data.filingStatus ?? '')
+      setStatePct(settings.data.stateRate != null ? String(Number(settings.data.stateRate) * 100) : '')
+    }
   }, [settings.data])
 
   const save = useMutation({
-    mutationFn: () => api.put('/api/settings', { benchmarkRate: rate === '' ? undefined : rate }),
+    mutationFn: () =>
+      api.put('/api/settings', {
+        benchmarkRate: rate === '' ? undefined : rate,
+        filingStatus: filingStatus || undefined,
+        stateRate: statePct === '' ? undefined : Number(statePct) / 100,
+      }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['settings'] })
       qc.invalidateQueries({ queryKey: ['insights'] })
+      qc.invalidateQueries({ queryKey: ['income'] })
     },
   })
 
@@ -32,27 +44,36 @@ export function SettingsPage() {
       <h1 className="page-title">Settings</h1>
       <p className="page-sub">{settings.data?.email}</p>
 
-      <SectionHead title="Benchmark rate" />
+      <SectionHead title="Preferences" />
       <Card>
-        <p className="page-sub" style={{ marginBottom: 14 }}>
-          Your best current safe return (e.g. high-yield savings APY). Debt opportunity-cost analysis is measured
-          against this rate.
-        </p>
         <Field label="Benchmark APY %">
-          <input
-            className="input num"
-            type="number"
-            step="0.01"
-            min="0"
-            max="100"
-            value={rate}
-            onChange={(e) => setRate(e.target.value)}
-            style={{ maxWidth: 200 }}
-          />
+          <input className="input num" type="number" step="0.01" min="0" max="100" value={rate} onChange={(e) => setRate(e.target.value)} style={{ maxWidth: 220 }} />
         </Field>
+        <p className="dim" style={{ fontSize: 13, margin: '-6px 0 14px' }}>
+          Your best current safe return (e.g. HYSA APY). Used for debt opportunity-cost analysis.
+        </p>
+
+        <div className="field-row" style={{ maxWidth: 460 }}>
+          <Field label="Tax filing status (default)">
+            <select className="input" value={filingStatus} onChange={(e) => setFilingStatus(e.target.value as FilingStatus | '')}>
+              <option value="">— not set —</option>
+              <option value="SINGLE">Single</option>
+              <option value="MARRIED_JOINT">Married filing jointly</option>
+              <option value="MARRIED_SEPARATE">Married filing separately</option>
+              <option value="HEAD_OF_HOUSEHOLD">Head of household</option>
+            </select>
+          </Field>
+          <Field label="State tax rate %">
+            <input className="input num" type="number" step="0.01" min="0" max="100" value={statePct} onChange={(e) => setStatePct(e.target.value)} />
+          </Field>
+        </div>
+        <p className="dim" style={{ fontSize: 13, margin: '-6px 0 14px' }}>
+          Defaults for bracket-based income tax estimates (each income source can override).
+        </p>
+
         {save.isSuccess && <div className="dim">Saved.</div>}
         {save.isError && <div className="error-text">Could not save.</div>}
-        <button className="btn" onClick={() => save.mutate()} disabled={save.isPending} style={{ marginTop: 8 }}>
+        <button className="btn" onClick={() => save.mutate()} disabled={save.isPending} style={{ marginTop: 4 }}>
           {save.isPending ? 'Saving…' : 'Save'}
         </button>
       </Card>

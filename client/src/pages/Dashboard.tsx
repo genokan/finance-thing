@@ -33,7 +33,7 @@ export function Dashboard() {
 
   const d = dash.data
   const i = insights.data
-  const surplus = d.totalIncome - d.totalExpenses
+  const surplus = d.netMonthlyIncome - d.totalExpenses
   const now = new Date()
 
   return (
@@ -57,7 +57,7 @@ export function Dashboard() {
       {record.isError && <div className="error-text">Could not record snapshot.</div>}
 
       <div className="grid cols-3" style={{ marginTop: 16 }}>
-        <Stat label="Monthly income" value={money(d.totalIncome)} />
+        <Stat label="Net monthly income" value={money(d.netMonthlyIncome)} />
         <Stat label="Monthly outflow" value={money(d.totalExpenses)} />
         <Stat label="Monthly surplus" value={money(surplus)} tone={surplus >= 0 ? 'pos' : 'neg'} />
       </div>
