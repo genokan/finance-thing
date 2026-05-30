@@ -1,0 +1,17 @@
+# Single-service deployment. PostgreSQL is external (homelab) and not managed here.
+# Secrets are provided via server/.env (gitignored) — never commit real values.
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: finance-thing:latest
+    container_name: finance-thing
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    env_file:
+      - server/.env
+    environment:
+      NODE_ENV: production
+      PORT: "3000"

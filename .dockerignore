@@ -1,0 +1,11 @@
+**/node_modules
+**/dist
+server/public
+**/.env
+*.csv
+.git
+.gitignore
+docs
+*.md
+**/*.tsbuildinfo
+npm-debug.log*
