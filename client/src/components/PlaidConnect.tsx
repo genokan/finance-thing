@@ -1,26 +1,36 @@
 import { useEffect, useState } from 'react'
-import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { usePlaidLink } from 'react-plaid-link'
 import { api } from '../api/client'
 import { Card } from './ui'
 
-// Connect a bank via Plaid Link and sync balances into Accounts. Used on the
-// Accounts page so linking lives next to where the accounts appear.
+interface LinkedItem {
+  itemId: string
+  institution: string
+  accountCount: number
+  createdAt: string
+}
+
+// Connect a bank via Plaid Link, sync balances into Accounts, and manage/remove
+// linked items. Lives on the Accounts page next to where the accounts appear.
 export function PlaidConnect() {
   const qc = useQueryClient()
   const [linkToken, setLinkToken] = useState<string | null>(null)
   const [status, setStatus] = useState<string | null>(null)
 
-  const refreshAccounts = () => {
+  const items = useQuery({ queryKey: ['plaid-items'], queryFn: () => api.get<LinkedItem[]>('/api/plaid/items') })
+
+  const refresh = () => {
     qc.invalidateQueries({ queryKey: ['accounts'] })
     qc.invalidateQueries({ queryKey: ['dashboard'] })
+    qc.invalidateQueries({ queryKey: ['plaid-items'] })
   }
 
   const sync = useMutation({
     mutationFn: () => api.post<{ synced: number; failed: string[] }>('/api/plaid/sync'),
     onSuccess: (r) => {
       setStatus(`Synced ${r.synced} account(s)${r.failed.length ? `, failed: ${r.failed.join(', ')}` : ''}.`)
-      refreshAccounts()
+      refresh()
     },
     onError: () => setStatus('Sync failed.'),
   })
@@ -33,8 +43,15 @@ export function PlaidConnect() {
     },
   })
 
-  // OAuth banks redirect back to PLAID_REDIRECT_URI with ?oauth_state_id=…; we
-  // resume Link with the original token (persisted) + the received redirect URI.
+  const disconnect = useMutation({
+    mutationFn: (itemId: string) => api.del(`/api/plaid/items/${itemId}`),
+    onSuccess: () => {
+      setStatus('Disconnected and removed its accounts.')
+      refresh()
+    },
+    onError: () => setStatus('Could not disconnect.'),
+  })
+
   const isOAuthReturn = typeof window !== 'undefined' && window.location.search.includes('oauth_state_id')
 
   const { open, ready } = usePlaidLink({
@@ -68,20 +85,43 @@ export function PlaidConnect() {
     }
   }
 
+  function onDisconnect(item: LinkedItem) {
+    if (window.confirm(`Disconnect ${item.institution} and delete its ${item.accountCount} synced account(s)? This cannot be undone.`)) {
+      disconnect.mutate(item.itemId)
+    }
+  }
+
+  const linked = items.data ?? []
+
   return (
     <Card>
-      <div className="row" style={{ paddingTop: 0, paddingBottom: 0 }}>
+      <div className="row" style={{ paddingTop: 0, paddingBottom: linked.length ? 12 : 0 }}>
         <div className="main">
           <div className="name">Connect a bank</div>
           <div className="meta">Link a bank or brokerage via Plaid to auto-import account balances.</div>
         </div>
         <div className="right">
           <button className="btn sm" onClick={startLink} disabled={exchange.isPending}>+ Connect</button>
-          <button className="btn ghost sm" onClick={() => sync.mutate()} disabled={sync.isPending}>
+          <button className="btn ghost sm" onClick={() => sync.mutate()} disabled={sync.isPending || !linked.length}>
             {sync.isPending ? 'Syncing…' : 'Sync'}
           </button>
         </div>
       </div>
+
+      {linked.map((item) => (
+        <div className="row" key={item.itemId}>
+          <div className="main">
+            <div className="name">{item.institution}</div>
+            <div className="meta">{item.accountCount} synced account(s)</div>
+          </div>
+          <div className="right">
+            <button className="btn danger sm" onClick={() => onDisconnect(item)} disabled={disconnect.isPending}>
+              Disconnect
+            </button>
+          </div>
+        </div>
+      ))}
+
       {status && <div className="dim" style={{ marginTop: 10 }}>{status}</div>}
     </Card>
   )

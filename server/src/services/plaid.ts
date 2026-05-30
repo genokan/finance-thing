@@ -85,9 +85,31 @@ export async function syncAllBalances(userId: string): Promise<{ synced: number;
   return { synced, failed }
 }
 
+export async function listItems(userId: string) {
+  const items = await prisma.plaidItem.findMany({
+    where: { userId },
+    include: { institution: true, _count: { select: { accounts: true } } },
+    orderBy: { createdAt: 'asc' },
+  })
+  return items.map((i) => ({
+    itemId: i.itemId,
+    institution: i.institution.name,
+    accountCount: i._count.accounts,
+    createdAt: i.createdAt,
+  }))
+}
+
+// Remove a linked item and every account it synced. The Plaid API call is
+// best-effort — local data is always cleaned up so the user can disconnect even
+// if Plaid is unreachable or the token is already invalid.
 export async function disconnectItem(itemId: string, userId: string): Promise<void> {
   const item = await prisma.plaidItem.findFirst({ where: { itemId, userId } })
   if (!item) throw new Error('Not found')
-  await client().itemRemove({ access_token: decrypt(item.accessToken) })
+  try {
+    await client().itemRemove({ access_token: decrypt(item.accessToken) })
+  } catch (err) {
+    console.error('Plaid itemRemove failed (continuing with local cleanup):', err instanceof Error ? err.message : err)
+  }
+  await prisma.account.deleteMany({ where: { userId, plaidItemId: item.id } })
   await prisma.plaidItem.delete({ where: { id: item.id } })
 }
