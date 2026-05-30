@@ -34,6 +34,11 @@ RUN npx prisma generate
 COPY --from=server-build /app/server/dist ./dist
 COPY --from=client-build /app/server/public ./public
 
+# tsx is needed to run the TypeScript seed script at startup
+RUN npm i -g tsx@4
+
 EXPOSE 3000
-# Apply schema then start (db push is safe/idempotent against the external DB)
-CMD ["sh", "-c", "npx prisma db push --skip-generate && node dist/index.js"]
+# On boot: sync schema, seed the initial user if SEED_* are set (idempotent — skips
+# if the user already exists), then start. No tunnel needed: the container runs on
+# the homelab network and reaches Postgres directly.
+CMD ["sh", "-c", "npx prisma db push --skip-generate && (if [ -n \"$SEED_EMAIL\" ] && [ -n \"$SEED_PASSWORD\" ]; then tsx prisma/seed.ts; fi) && node dist/index.js"]
