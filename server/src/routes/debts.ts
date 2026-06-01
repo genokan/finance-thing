@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { prisma } from '../lib/prisma'
 import { validate } from '../middleware/validate'
 import { debtPaymentInfo, type DebtWithAccount } from '../lib/debtPayment'
+import { ownsAccount, ownsCategory } from '../lib/ownership'
 
 export const debtsRouter = Router()
 
@@ -36,14 +37,22 @@ debtsRouter.get('/', async (req, res) => {
   res.json(debts.map(withPayment))
 })
 
+async function checkRefs(userId: string, data: z.infer<typeof debtSchema>, res: import('express').Response): Promise<boolean> {
+  if (!(await ownsAccount(userId, data.accountId))) { res.status(404).json({ error: 'Account not found' }); return false }
+  if (!(await ownsCategory(userId, data.categoryId))) { res.status(404).json({ error: 'Category not found' }); return false }
+  return true
+}
+
 debtsRouter.post('/', validate(debtSchema), async (req, res) => {
   const data = req.body as z.infer<typeof debtSchema>
+  if (!(await checkRefs(req.userId, data, res))) return
   const debt = await prisma.debt.create({ data: { ...data, userId: req.userId }, include })
   res.status(201).json(withPayment(debt))
 })
 
 debtsRouter.put('/:id', validate(debtSchema), async (req, res) => {
   const data = req.body as z.infer<typeof debtSchema>
+  if (!(await checkRefs(req.userId, data, res))) return
   try {
     const debt = await prisma.debt.update({ where: { id: req.params.id as string, userId: req.userId }, data, include })
     res.json(withPayment(debt))

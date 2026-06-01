@@ -4,6 +4,7 @@ import { prisma } from '../lib/prisma'
 import { validate } from '../middleware/validate'
 import { withValue } from '../lib/accountValue'
 import { refreshAllPrices } from '../services/finnhub'
+import { ownsAccount } from '../lib/ownership'
 
 export const accountsRouter = Router()
 
@@ -79,15 +80,9 @@ accountsRouter.delete('/:id', async (req, res) => {
   }
 })
 
-// Verify the account belongs to the requesting user before touching holdings.
-async function ownAccount(userId: string, accountId: string): Promise<boolean> {
-  const a = await prisma.account.findFirst({ where: { id: accountId, userId }, select: { id: true } })
-  return !!a
-}
-
 accountsRouter.post('/:id/holdings', validate(holdingSchema), async (req, res) => {
   const accountId = req.params.id as string
-  if (!(await ownAccount(req.userId, accountId))) {
+  if (!(await ownsAccount(req.userId, accountId))) {
     res.status(404).json({ error: 'Account not found' })
     return
   }
@@ -98,7 +93,7 @@ accountsRouter.post('/:id/holdings', validate(holdingSchema), async (req, res) =
 
 accountsRouter.put('/:id/holdings/:hid', validate(holdingSchema), async (req, res) => {
   const accountId = req.params.id as string
-  if (!(await ownAccount(req.userId, accountId))) {
+  if (!(await ownsAccount(req.userId, accountId))) {
     res.status(404).json({ error: 'Account not found' })
     return
   }
@@ -116,7 +111,7 @@ accountsRouter.put('/:id/holdings/:hid', validate(holdingSchema), async (req, re
 
 accountsRouter.delete('/:id/holdings/:hid', async (req, res) => {
   const accountId = req.params.id as string
-  if (!(await ownAccount(req.userId, accountId))) {
+  if (!(await ownsAccount(req.userId, accountId))) {
     res.status(404).json({ error: 'Account not found' })
     return
   }

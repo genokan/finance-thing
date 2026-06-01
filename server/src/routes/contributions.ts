@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { prisma } from '../lib/prisma'
 import { validate } from '../middleware/validate'
 import { toMonthlyEquivalent } from '../lib/monthlyEquivalent'
+import { ownsAccount } from '../lib/ownership'
 import type { IntervalUnit } from '../generated/prisma/client'
 
 export const contributionsRouter = Router()
@@ -38,12 +39,14 @@ contributionsRouter.get('/', async (req, res) => {
 
 contributionsRouter.post('/', validate(contributionSchema), async (req, res) => {
   const data = req.body as z.infer<typeof contributionSchema>
+  if (!(await ownsAccount(req.userId, data.destinationAccountId))) { res.status(404).json({ error: 'Account not found' }); return }
   const item = await prisma.contribution.create({ data: { ...data, userId: req.userId }, include })
   res.status(201).json(withMonthly(item))
 })
 
 contributionsRouter.put('/:id', validate(contributionSchema), async (req, res) => {
   const data = req.body as z.infer<typeof contributionSchema>
+  if (!(await ownsAccount(req.userId, data.destinationAccountId))) { res.status(404).json({ error: 'Account not found' }); return }
   try {
     const item = await prisma.contribution.update({ where: { id: req.params.id as string, userId: req.userId }, data, include })
     res.json(withMonthly(item))

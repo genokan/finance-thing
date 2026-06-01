@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { prisma } from '../lib/prisma'
 import { validate } from '../middleware/validate'
 import { toMonthlyEquivalent } from '../lib/monthlyEquivalent'
+import { ownsCategory } from '../lib/ownership'
 import type { IntervalUnit } from '../generated/prisma/client'
 
 export const expensesRouter = Router()
@@ -47,12 +48,14 @@ expensesRouter.get('/', async (req, res) => {
 
 expensesRouter.post('/', validate(expenseSchema), async (req, res) => {
   const data = req.body as z.infer<typeof expenseSchema>
+  if (!(await ownsCategory(req.userId, data.categoryId))) { res.status(404).json({ error: 'Category not found' }); return }
   const item = await prisma.expenseItem.create({ data: { ...data, userId: req.userId }, include: { category: true } })
   res.status(201).json(withMonthly(item))
 })
 
 expensesRouter.put('/:id', validate(expenseSchema), async (req, res) => {
   const data = req.body as z.infer<typeof expenseSchema>
+  if (!(await ownsCategory(req.userId, data.categoryId))) { res.status(404).json({ error: 'Category not found' }); return }
   try {
     const item = await prisma.expenseItem.update({
       where: { id: req.params.id as string, userId: req.userId },

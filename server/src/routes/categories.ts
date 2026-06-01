@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { prisma } from '../lib/prisma'
 import { validate } from '../middleware/validate'
 import { DEFAULT_CATEGORIES } from '../lib/defaultCategories'
+import { ownsCategory } from '../lib/ownership'
 
 export const categoriesRouter = Router()
 
@@ -49,12 +50,14 @@ categoriesRouter.post('/seed-defaults', async (req, res) => {
 
 categoriesRouter.post('/', validate(categorySchema), async (req, res) => {
   const data = req.body as z.infer<typeof categorySchema>
+  if (!(await ownsCategory(req.userId, data.parentId))) { res.status(404).json({ error: 'Parent category not found' }); return }
   const category = await prisma.category.create({ data: { ...data, userId: req.userId } })
   res.status(201).json(category)
 })
 
 categoriesRouter.put('/:id', validate(categorySchema), async (req, res) => {
   const data = req.body as z.infer<typeof categorySchema>
+  if (!(await ownsCategory(req.userId, data.parentId))) { res.status(404).json({ error: 'Parent category not found' }); return }
   try {
     const category = await prisma.category.update({
       where: { id: req.params.id as string, userId: req.userId },

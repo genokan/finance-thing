@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { prisma } from '../lib/prisma'
 import { validate } from '../middleware/validate'
 import { estimateTax } from '../services/tax'
+import { ownsAllAccounts } from '../lib/ownership'
 
 export const incomeRouter = Router()
 
@@ -61,8 +62,17 @@ incomeRouter.get('/', async (req, res) => {
   res.json(sources.map((s) => ({ ...s, tax: estimateTax(s, defaults) })))
 })
 
+// Every account a paycheck routes to / deducts into must belong to the user.
+function referencedAccountIds(deductions: z.infer<typeof deductionSchema>[], distributions: z.infer<typeof distributionSchema>[]) {
+  return [...deductions.map((d) => d.linkedAccountId), ...distributions.map((d) => d.accountId)]
+}
+
 incomeRouter.post('/', validate(incomeSchema), async (req, res) => {
   const { deductions, distributions, ...data } = req.body as z.infer<typeof incomeSchema>
+  if (!(await ownsAllAccounts(req.userId, referencedAccountIds(deductions, distributions)))) {
+    res.status(404).json({ error: 'Account not found' })
+    return
+  }
   const source = await prisma.incomeSource.create({
     data: { ...data, userId: req.userId, deductions: { create: deductionCreate(deductions) }, distributions: { create: distributionCreate(distributions) } },
     include,
@@ -73,6 +83,10 @@ incomeRouter.post('/', validate(incomeSchema), async (req, res) => {
 incomeRouter.put('/:id', validate(incomeSchema), async (req, res) => {
   const { deductions, distributions, ...data } = req.body as z.infer<typeof incomeSchema>
   const id = req.params.id as string
+  if (!(await ownsAllAccounts(req.userId, referencedAccountIds(deductions, distributions)))) {
+    res.status(404).json({ error: 'Account not found' })
+    return
+  }
   try {
     // Replace child collections wholesale.
     await prisma.incomeDeduction.deleteMany({ where: { incomeSourceId: id } })
