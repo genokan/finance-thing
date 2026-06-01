@@ -3,7 +3,7 @@ import { z } from 'zod'
 import { prisma } from '../lib/prisma'
 import { validate } from '../middleware/validate'
 import { toMonthlyEquivalent } from '../lib/monthlyEquivalent'
-import type { IntervalUnit } from '@prisma/client'
+import type { IntervalUnit } from '../generated/prisma/client'
 
 export const expensesRouter = Router()
 
@@ -14,7 +14,8 @@ const expenseSchema = z.object({
   intervalCount: z.coerce.number().int().positive().default(1),
   intervalUnit: z.enum(['DAY', 'WEEK', 'MONTH', 'YEAR']).default('MONTH'),
   dueDate: z.coerce.date().optional(),
-  categoryId: z.string().cuid().optional(),
+  bucket: z.enum(['ESSENTIAL', 'DISCRETIONARY', 'SAVINGS']).nullish(),
+  categoryId: z.string().cuid().nullish(),
   notes: z.string().optional(),
   expiresAt: z.coerce.date().optional(),
   renewsAt: z.coerce.date().optional(),

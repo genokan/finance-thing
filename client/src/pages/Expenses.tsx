@@ -1,8 +1,8 @@
 import { useMemo, useState, type FormEvent } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from '../api/client'
-import type { Category, Expense, ExpenseKind, IntervalUnit } from '../api/types'
-import { Card, Empty, Field, Loading, Modal, SectionHead } from '../components/ui'
+import type { BudgetBucket, Category, Expense, ExpenseKind, IntervalUnit } from '../api/types'
+import { BucketBadge, BucketSelect, Card, Empty, Field, Loading, MoneyInput, Modal, SectionHead } from '../components/ui'
 import { dateLabel, intervalLabel, money } from '../lib/format'
 
 interface FormState {
@@ -12,6 +12,7 @@ interface FormState {
   intervalCount: string
   intervalUnit: IntervalUnit
   dueDate: string
+  bucket: BudgetBucket | ''
   categoryId: string
   notes: string
   renewsAt: string
@@ -20,7 +21,7 @@ interface FormState {
 
 const EMPTY: FormState = {
   name: '', amount: '', kind: 'RECURRING', intervalCount: '1', intervalUnit: 'MONTH',
-  dueDate: '', categoryId: '', notes: '', renewsAt: '', expiresAt: '',
+  dueDate: '', bucket: 'ESSENTIAL', categoryId: '', notes: '', renewsAt: '', expiresAt: '',
 }
 
 export function Expenses() {
@@ -67,7 +68,8 @@ export function Expenses() {
                 <div className="main">
                   <div className="name">{e.name}</div>
                   <div className="meta">
-                    {e.category ? <span className={`badge ${e.category.bucket === 'ESSENTIAL' ? 'neutral' : e.category.bucket === 'SAVINGS' ? 'good' : 'warn'}`}>{e.category.name}</span> : <span className="badge neutral">uncategorized</span>}
+                    <BucketBadge bucket={e.bucket} />
+                    {e.category ? <span className="dim"> · {e.category.name}</span> : null}
                     {' '}· {money(e.amount, true)} {intervalLabel(e.intervalCount, e.intervalUnit)}
                   </div>
                 </div>
@@ -90,8 +92,10 @@ export function Expenses() {
               <div className="row" key={e.id}>
                 <div className="main">
                   <div className="name">{e.name}</div>
-                  <div className="meta num">
-                    {e.category ? `${e.category.name} · ` : ''}due {dateLabel(e.dueDate)}
+                  <div className="meta">
+                    <BucketBadge bucket={e.bucket} />
+                    {e.category ? <span className="dim"> · {e.category.name}</span> : null}
+                    <span className="num"> · due {dateLabel(e.dueDate)}</span>
                   </div>
                 </div>
                 <div className="right">
@@ -127,12 +131,14 @@ function ExpenseModal({
   onClose: () => void
   onSubmit: (body: Record<string, unknown>) => void
 }) {
+  const qc = useQueryClient()
   const [f, setF] = useState<FormState>(
     expense
       ? {
           name: expense.name, amount: String(expense.amount), kind: expense.kind,
           intervalCount: String(expense.intervalCount), intervalUnit: expense.intervalUnit,
           dueDate: expense.dueDate ? expense.dueDate.slice(0, 10) : '',
+          bucket: expense.bucket ?? '',
           categoryId: expense.categoryId ?? '', notes: expense.notes ?? '',
           renewsAt: expense.renewsAt ? expense.renewsAt.slice(0, 10) : '',
           expiresAt: expense.expiresAt ? expense.expiresAt.slice(0, 10) : '',
@@ -141,11 +147,26 @@ function ExpenseModal({
   )
   const set = (k: keyof FormState) => (e: { target: { value: string } }) => setF({ ...f, [k]: e.target.value })
 
+  // Inline sub-category creation so you don't have to leave the form. The new
+  // tag inherits whichever bucket is currently selected.
+  const [addingCat, setAddingCat] = useState(false)
+  const [catName, setCatName] = useState('')
+  const createCat = useMutation({
+    mutationFn: () => api.post<Category>('/api/categories', { name: catName, bucket: f.bucket || 'ESSENTIAL' }),
+    onSuccess: (cat) => {
+      qc.invalidateQueries({ queryKey: ['categories'] })
+      setF((prev) => ({ ...prev, categoryId: cat.id }))
+      setAddingCat(false)
+      setCatName('')
+    },
+  })
+
   function submit(e: FormEvent) {
     e.preventDefault()
     const body: Record<string, unknown> = {
       name: f.name, amount: f.amount, kind: f.kind,
-      categoryId: f.categoryId || undefined, notes: f.notes || undefined,
+      bucket: f.bucket || null,
+      categoryId: f.categoryId || null, notes: f.notes || undefined,
     }
     if (f.kind === 'RECURRING') {
       body.intervalCount = Number(f.intervalCount)
@@ -163,7 +184,7 @@ function ExpenseModal({
       <form onSubmit={submit}>
         <Field label="Name"><input className="input" value={f.name} onChange={set('name')} required /></Field>
         <div className="field-row">
-          <Field label="Amount"><input className="input num" type="number" step="0.01" min="0" value={f.amount} onChange={set('amount')} required /></Field>
+          <Field label="Amount"><MoneyInput value={f.amount} onChange={(v) => setF({ ...f, amount: v })} required /></Field>
           <Field label="Type">
             <select className="input" value={f.kind} onChange={set('kind')}>
               <option value="RECURRING">Recurring</option>
@@ -171,11 +192,25 @@ function ExpenseModal({
             </select>
           </Field>
         </div>
-        <Field label="Category">
-          <select className="input" value={f.categoryId} onChange={set('categoryId')}>
-            <option value="">— none —</option>
-            {categories.map((c) => <option key={c.id} value={c.id}>{c.parentId ? '↳ ' : ''}{c.name}</option>)}
-          </select>
+        <Field label="Bucket">
+          <BucketSelect value={f.bucket} onChange={(v) => setF({ ...f, bucket: v })} />
+        </Field>
+        <Field label="Sub-category / tag (optional)">
+          {addingCat ? (
+            <div className="field-row">
+              <input className="input" placeholder="e.g. Groceries, Dining out" value={catName} onChange={(e) => setCatName(e.target.value)} autoFocus />
+              <button type="button" className="btn sm" disabled={!catName || createCat.isPending} onClick={() => createCat.mutate()}>Add</button>
+              <button type="button" className="iconbtn" onClick={() => setAddingCat(false)}>✕</button>
+            </div>
+          ) : (
+            <div style={{ display: 'flex', gap: 8 }}>
+              <select className="input" value={f.categoryId} onChange={set('categoryId')} style={{ flex: 1 }}>
+                <option value="">— none —</option>
+                {categories.map((c) => <option key={c.id} value={c.id}>{c.parentId ? '↳ ' : ''}{c.name}</option>)}
+              </select>
+              <button type="button" className="btn ghost sm" onClick={() => setAddingCat(true)}>+ New</button>
+            </div>
+          )}
         </Field>
         {f.kind === 'RECURRING' ? (
           <>

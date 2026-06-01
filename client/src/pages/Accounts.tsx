@@ -2,15 +2,20 @@ import { useMemo, useState, type FormEvent } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from '../api/client'
 import type { Account, AccountKind, Holding, Institution, TrackingMode } from '../api/types'
-import { Card, Empty, Field, Loading, Modal, SectionHead } from '../components/ui'
+import { Card, Empty, Field, Loading, MoneyInput, Modal, SectionHead } from '../components/ui'
 import { PlaidConnect } from '../components/PlaidConnect'
 import { dateLabel, money } from '../lib/format'
 
-const KIND_LABELS: Record<AccountKind, string> = {
+export const KIND_LABELS: Record<AccountKind, string> = {
   CHECKING: 'Checking', SAVINGS: 'Savings', MONEY_MARKET: 'Money Market', BROKERAGE: 'Brokerage',
   IRA: 'IRA', ROTH_IRA: 'Roth IRA', PLAN_401K: '401(k)', DEFINED_CONTRIBUTION: 'DC Plan',
-  HSA: 'HSA', RSU: 'RSU', OTHER: 'Other',
+  HSA: 'HSA', RSU: 'RSU',
+  CREDIT_CARD: 'Credit Card', LOAN: 'Loan', LINE_OF_CREDIT: 'Line of Credit', MORTGAGE: 'Mortgage',
+  OTHER: 'Other',
 }
+
+const LIABILITY_KINDS: AccountKind[] = ['CREDIT_CARD', 'LOAN', 'LINE_OF_CREDIT', 'MORTGAGE']
+export const isLiabilityKind = (k: AccountKind) => LIABILITY_KINDS.includes(k)
 
 async function resolveInstitution(name: string, existing: Institution[]): Promise<string | undefined> {
   const trimmed = name.trim()
@@ -55,7 +60,8 @@ export function Accounts() {
     onSuccess: invalidate,
   })
 
-  const total = useMemo(() => (accounts.data ?? []).reduce((s, a) => s + a.value, 0), [accounts.data])
+  const assetsTotal = useMemo(() => (accounts.data ?? []).filter((a) => !isLiabilityKind(a.kind)).reduce((s, a) => s + a.value, 0), [accounts.data])
+  const liabilitiesTotal = useMemo(() => (accounts.data ?? []).filter((a) => isLiabilityKind(a.kind)).reduce((s, a) => s + a.value, 0), [accounts.data])
   const unvested = useMemo(() => (accounts.data ?? []).reduce((s, a) => s + a.unvestedValue, 0), [accounts.data])
 
   const grouped = useMemo(() => {
@@ -73,7 +79,8 @@ export function Accounts() {
     <div>
       <h1 className="page-title">Accounts</h1>
       <p className="page-sub num">
-        {money(total)} across {accounts.data?.length ?? 0} accounts{unvested > 0 ? ` · ${money(unvested)} unvested` : ''}
+        <span className="pos">{money(assetsTotal)}</span> assets · <span className="neg">{money(liabilitiesTotal)}</span> owed
+        {unvested > 0 ? ` · ${money(unvested)} unvested` : ''}
       </p>
 
       <SectionHead title="Linked banks (Plaid)" />
@@ -107,7 +114,7 @@ export function Accounts() {
               <Card key={a.id} className="" >
                 <div className="row" style={{ paddingTop: 0 }}>
                   <div className="main">
-                    <div className="name">{a.name} <span className="badge neutral">{KIND_LABELS[a.kind]}</span></div>
+                    <div className="name">{a.name} <span className="badge neutral">{KIND_LABELS[a.kind]}</span>{a.isEmergencyFund && <span className="badge good"> emergency fund</span>}</div>
                     <div className="meta">
                       {a.trackingMode === 'HOLDINGS' ? `${a.holdings.length} holding(s)` : 'Balance-tracked'}
                       {a.lastUpdatedAt ? ` · updated ${dateLabel(a.lastUpdatedAt)}` : ''}
@@ -115,7 +122,7 @@ export function Accounts() {
                     </div>
                   </div>
                   <div className="right">
-                    <div className="amt num">{money(a.value)}</div>
+                    <div className={`amt num ${isLiabilityKind(a.kind) ? 'neg' : ''}`}>{money(a.value)}{isLiabilityKind(a.kind) ? ' owed' : ''}</div>
                     <button className="iconbtn" onClick={() => setAcctModal({ open: true, editing: a })}>✎</button>
                     <button className="iconbtn" onClick={() => removeAccount.mutate(a.id)}>✕</button>
                   </div>
@@ -168,20 +175,22 @@ export function Accounts() {
   )
 }
 
-function AccountModal({
-  account, institutions, saving, onClose, onSubmit,
+export function AccountModal({
+  account, institutions, saving, onClose, onSubmit, defaultKind,
 }: {
   account: Account | null
   institutions: Institution[]
   saving: boolean
   onClose: () => void
   onSubmit: (p: { id?: string; body: Record<string, unknown> }) => void
+  defaultKind?: AccountKind
 }) {
   const [name, setName] = useState(account?.name ?? '')
-  const [kind, setKind] = useState<AccountKind>(account?.kind ?? 'CHECKING')
+  const [kind, setKind] = useState<AccountKind>(account?.kind ?? defaultKind ?? 'CHECKING')
   const [trackingMode, setTrackingMode] = useState<TrackingMode>(account?.trackingMode ?? 'BALANCE')
   const [balance, setBalance] = useState(account ? String(account.balance) : '')
   const [institution, setInstitution] = useState(account?.institution?.name ?? '')
+  const [isEmergencyFund, setIsEmergencyFund] = useState(account?.isEmergencyFund ?? false)
   const [busy, setBusy] = useState(false)
 
   async function submit(e: FormEvent) {
@@ -189,7 +198,7 @@ function AccountModal({
     setBusy(true)
     let institutionId: string | undefined
     try { institutionId = await resolveInstitution(institution, institutions) } finally { setBusy(false) }
-    onSubmit({ id: account?.id, body: { name, kind, trackingMode, balance: balance || '0', institutionId } })
+    onSubmit({ id: account?.id, body: { name, kind, trackingMode, balance: balance || '0', isEmergencyFund, institutionId } })
   }
 
   return (
@@ -216,12 +225,18 @@ function AccountModal({
           </select>
         </Field>
         {trackingMode === 'BALANCE' && (
-          <Field label="Current balance">
-            <input className="input num" type="number" step="0.01" value={balance} onChange={(e) => setBalance(e.target.value)} />
+          <Field label={isLiabilityKind(kind) ? 'Amount owed' : 'Current balance'}>
+            <MoneyInput value={balance} onChange={setBalance} />
           </Field>
         )}
         {trackingMode === 'HOLDINGS' && (
           <p className="dim" style={{ fontSize: 13, marginBottom: 12 }}>Value comes from the holdings you add to this account.</p>
+        )}
+        {!isLiabilityKind(kind) && (
+          <label style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '4px 0 14px', cursor: 'pointer' }}>
+            <input type="checkbox" checked={isEmergencyFund} onChange={(e) => setIsEmergencyFund(e.target.checked)} />
+            <span>This is my emergency fund</span>
+          </label>
         )}
         <div className="modal-actions">
           <button type="button" className="btn ghost" onClick={onClose}>Cancel</button>
@@ -232,7 +247,7 @@ function AccountModal({
   )
 }
 
-function HoldingModal({
+export function HoldingModal({
   holding, saving, onClose, onSubmit,
 }: {
   holding: Holding | null
@@ -268,7 +283,7 @@ function HoldingModal({
           <Field label="Ticker"><input className="input" value={ticker} onChange={(e) => setTicker(e.target.value.toUpperCase())} /></Field>
         </div>
         <div className="field-row">
-          <Field label="Value"><input className="input num" type="number" step="0.01" value={value} onChange={(e) => setValue(e.target.value)} required /></Field>
+          <Field label="Value"><MoneyInput value={value} onChange={setValue} required /></Field>
           <Field label="Shares (enables price refresh)"><input className="input num" type="number" step="0.000001" value={shares} onChange={(e) => setShares(e.target.value)} /></Field>
         </div>
         <p className="dim" style={{ fontSize: 13, margin: '4px 0 10px' }}>RSU? Use vested/unvested below (leave shares blank).</p>
@@ -277,7 +292,7 @@ function HoldingModal({
           <Field label="Unvested shares"><input className="input num" type="number" step="0.000001" value={unvestedShares} onChange={(e) => setUnvestedShares(e.target.value)} /></Field>
         </div>
         <Field label="Unvested value (excluded from liquid net worth)">
-          <input className="input num" type="number" step="0.01" value={unvestedValue} onChange={(e) => setUnvestedValue(e.target.value)} />
+          <MoneyInput value={unvestedValue} onChange={setUnvestedValue} />
         </Field>
         <div className="modal-actions">
           <button type="button" className="btn ghost" onClick={onClose}>Cancel</button>

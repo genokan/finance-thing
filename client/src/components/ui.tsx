@@ -1,16 +1,90 @@
 import type { ReactNode } from 'react'
+import { Link } from 'react-router-dom'
+import type { BudgetBucket } from '../api/types'
 
-export function Card({ children, className = '' }: { children: ReactNode; className?: string }) {
-  return <div className={`card ${className}`}>{children}</div>
+// The 50/30/20 buckets ARE the primary categories — three fixed options, never created.
+export const BUCKETS: { value: BudgetBucket; label: string; cls: string }[] = [
+  { value: 'ESSENTIAL', label: 'Needs', cls: 'warn' },
+  { value: 'DISCRETIONARY', label: 'Wants', cls: 'info' },
+  { value: 'SAVINGS', label: 'Savings', cls: 'good' },
+]
+const BUCKET_BY_VALUE = Object.fromEntries(BUCKETS.map((b) => [b.value, b]))
+
+/** Segmented Needs/Wants/Savings picker. Always available — nothing to create. */
+export function BucketSelect({
+  value,
+  onChange,
+}: {
+  value: BudgetBucket | ''
+  onChange: (v: BudgetBucket) => void
+}) {
+  return (
+    <div className="seg">
+      {BUCKETS.map((b) => (
+        <button
+          type="button"
+          key={b.value}
+          className={`seg-btn ${value === b.value ? 'active' : ''}`}
+          onClick={() => onChange(b.value)}
+        >
+          {b.label}
+        </button>
+      ))}
+    </div>
+  )
 }
 
-export function Stat({ label, value, tone }: { label: string; value: ReactNode; tone?: 'pos' | 'neg' | 'accent' }) {
+export function BucketBadge({ bucket }: { bucket: BudgetBucket | null }) {
+  if (!bucket) return <span className="badge neutral">unbucketed</span>
+  const b = BUCKET_BY_VALUE[bucket]
+  return <span className={`badge ${b.cls}`}>{b.label}</span>
+}
+
+export function Card({
+  children,
+  className = '',
+  onClick,
+}: {
+  children: ReactNode
+  className?: string
+  onClick?: () => void
+}) {
   return (
-    <Card>
+    <div className={`card ${className}`} onClick={onClick}>
+      {children}
+    </div>
+  )
+}
+
+export function Stat({
+  label,
+  value,
+  tone,
+  sub,
+  to,
+}: {
+  label: string
+  value: ReactNode
+  tone?: 'pos' | 'neg' | 'accent'
+  sub?: ReactNode
+  to?: string
+}) {
+  const inner = (
+    <>
       <div className="stat-label">{label}</div>
       <div className={`stat-value num ${tone ?? ''}`}>{value}</div>
-    </Card>
+      {sub != null && <div className="stat-sub">{sub}</div>}
+      {to && <span className="stat-arrow">→</span>}
+    </>
   )
+  if (to) {
+    return (
+      <Link to={to} className="card stat-card clickable">
+        {inner}
+      </Link>
+    )
+  }
+  return <Card className="stat-card">{inner}</Card>
 }
 
 export function SectionHead({ title, action }: { title: string; action?: ReactNode }) {
@@ -36,6 +110,38 @@ export function Bar({ pct, tone = 'accent' }: { pct: number; tone?: string }) {
   return (
     <div className="bar">
       <span style={{ width: `${Math.max(0, Math.min(100, pct))}%`, background: color }} />
+    </div>
+  )
+}
+
+// Number input adorned with a leading $ for dollar values.
+export function MoneyInput({
+  value,
+  onChange,
+  required,
+  min = '0',
+  placeholder,
+}: {
+  value: string
+  onChange: (v: string) => void
+  required?: boolean
+  min?: string
+  placeholder?: string
+}) {
+  return (
+    <div style={{ position: 'relative' }}>
+      <span style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-dim)', pointerEvents: 'none' }}>$</span>
+      <input
+        className="input num"
+        type="number"
+        step="0.01"
+        min={min}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        required={required}
+        placeholder={placeholder}
+        style={{ paddingLeft: 22 }}
+      />
     </div>
   )
 }

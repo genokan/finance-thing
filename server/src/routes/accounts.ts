@@ -17,6 +17,7 @@ const accountSchema = z.object({
   kind: z.enum(ACCOUNT_KINDS),
   trackingMode: z.enum(['BALANCE', 'HOLDINGS']).default('BALANCE'),
   balance: z.coerce.number().default(0),
+  isEmergencyFund: z.coerce.boolean().default(false),
   institutionId: z.string().cuid().optional(),
 })
 

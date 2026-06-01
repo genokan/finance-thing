@@ -1,4 +1,4 @@
-import type { IntervalUnit } from '@prisma/client'
+import type { IntervalUnit } from '../generated/prisma/client'
 
 const UNIT_DAYS: Record<IntervalUnit, number> = {
   DAY: 1,

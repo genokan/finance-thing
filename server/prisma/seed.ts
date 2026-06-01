@@ -1,21 +1,6 @@
-import { PrismaClient, type BudgetBucket } from '@prisma/client'
+import { prisma } from '../src/lib/prisma'
 import bcrypt from 'bcrypt'
-
-const prisma = new PrismaClient()
-
-// Default category tree: parents with subcategories. Fully editable in the app —
-// this is just a useful starting point. bucket drives the 50/30/20 roll-up.
-const CATEGORY_TREE: { name: string; bucket: BudgetBucket; children?: string[] }[] = [
-  { name: 'Housing', bucket: 'ESSENTIAL', children: ['Rent / Mortgage', 'Utilities', 'Internet', 'Home Insurance'] },
-  { name: 'Food', bucket: 'ESSENTIAL', children: ['Groceries'] },
-  { name: 'Transportation', bucket: 'ESSENTIAL', children: ['Car Payment', 'Gas', 'Auto Insurance'] },
-  { name: 'Healthcare', bucket: 'ESSENTIAL', children: ['Medical', 'Pharmacy'] },
-  { name: 'Dining Out', bucket: 'DISCRETIONARY', children: ['Restaurants', 'Coffee'] },
-  { name: 'Entertainment', bucket: 'DISCRETIONARY', children: ['Streaming', 'Hobbies'] },
-  { name: 'Shopping', bucket: 'DISCRETIONARY', children: ['Clothing', 'Household'] },
-  { name: 'Subscriptions', bucket: 'DISCRETIONARY' },
-  { name: 'Savings', bucket: 'SAVINGS', children: ['Emergency Fund', 'Investments', 'Retirement'] },
-]
+import { DEFAULT_CATEGORIES } from '../src/lib/defaultCategories'
 
 async function seedCategories(userId: string) {
   const count = await prisma.category.count({ where: { userId } })
@@ -24,7 +9,7 @@ async function seedCategories(userId: string) {
     return
   }
   let total = 0
-  for (const parent of CATEGORY_TREE) {
+  for (const parent of DEFAULT_CATEGORIES) {
     const created = await prisma.category.create({
       data: { userId, name: parent.name, bucket: parent.bucket, appliesTo: 'ANY' },
     })

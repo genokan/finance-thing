@@ -1,10 +1,11 @@
 generator client {
-  provider = "prisma-client-js"
+  provider     = "prisma-client"
+  output       = "../src/generated/prisma"
+  moduleFormat = "cjs"
 }
 
 datasource db {
   provider = "postgresql"
-  url      = env("DATABASE_URL")
 }
 
 // ---------- Enums ----------
@@ -45,6 +46,11 @@ enum AccountKind {
   DEFINED_CONTRIBUTION
   HSA
   RSU
+  // Liabilities
+  CREDIT_CARD
+  LOAN
+  LINE_OF_CREDIT
+  MORTGAGE
   OTHER
 }
 
@@ -134,6 +140,7 @@ model Account {
   trackingMode  TrackingMode @default(BALANCE)
   // Used when trackingMode = BALANCE. With HOLDINGS, value = sum(holdings.value).
   balance       Decimal      @default(0) @db.Decimal(14, 2)
+  isEmergencyFund Boolean    @default(false)
   institutionId String?
   institution   Institution? @relation(fields: [institutionId], references: [id])
   plaidItemId   String?
@@ -147,6 +154,7 @@ model Account {
   distributions IncomeDistribution[]
   deductions    IncomeDeduction[]
   snapshots     AccountSnapshot[]
+  debts         Debt[]
 
   @@index([userId])
 }
@@ -208,7 +216,9 @@ model ExpenseItem {
   intervalCount Int          @default(1)
   intervalUnit  IntervalUnit @default(MONTH)
   dueDate       DateTime?    // for ONE_TIME planned expenses
-  categoryId    String?
+  // Needs/Wants/Savings IS the primary category — fixed bucket, no creation needed.
+  bucket        BudgetBucket?
+  categoryId    String?      // optional finer-grained sub-category / tag
   category      Category?    @relation(fields: [categoryId], references: [id], onDelete: SetNull)
   notes         String?
   expiresAt     DateTime?
@@ -281,10 +291,17 @@ model Debt {
   name           String
   term           DebtTerm
   kind           DebtKind     @default(OTHER)
-  categoryId     String?
+  bucket         BudgetBucket?  // Needs/Wants/Savings — fixed bucket, no creation needed
+  categoryId     String?        // optional finer-grained sub-category / tag
   category       Category?    @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  // Optional link to the real liability account (Plaid or manual). When set, the
+  // account's balance is the source of truth for principal (avoids double counting).
+  accountId      String?
+  account        Account?     @relation(fields: [accountId], references: [id], onDelete: SetNull)
   principal      Decimal      @db.Decimal(14, 2)
+  // Actual payment (override). When 0/blank, the amortized minimum from termMonths is used.
   monthlyPayment Decimal      @db.Decimal(12, 2)
+  termMonths     Int?         // loan length in months — drives the amortized minimum payment
   apr            Decimal      @db.Decimal(6, 4)
   institutionId  String?
   institution    Institution? @relation(fields: [institutionId], references: [id])

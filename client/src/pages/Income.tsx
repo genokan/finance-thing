@@ -2,7 +2,7 @@ import { useState, type FormEvent } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from '../api/client'
 import type { Account, IncomeSource, IncomeType, PayFrequency, TaxMode, FilingStatus, Deduction, Distribution } from '../api/types'
-import { Card, Empty, Field, Loading, Modal, SectionHead } from '../components/ui'
+import { Card, Empty, Field, Loading, MoneyInput, Modal, SectionHead } from '../components/ui'
 import { money, percent } from '../lib/format'
 
 const FREQ_LABELS: Record<PayFrequency, string> = {
@@ -173,8 +173,8 @@ function IncomeModal({
           </Field>
         </div>
         <div className="field-row">
-          <Field label="Gross annual"><input className="input num" type="number" step="0.01" value={grossAnnual} onChange={(e) => setGrossAnnual(e.target.value)} placeholder="or use per-paycheck" /></Field>
-          <Field label="Gross / paycheck"><input className="input num" type="number" step="0.01" value={grossPerPaycheck} onChange={(e) => setGrossPerPaycheck(e.target.value)} /></Field>
+          <Field label="Gross annual"><MoneyInput value={grossAnnual} onChange={setGrossAnnual} placeholder="or use per-paycheck" /></Field>
+          <Field label="Gross / paycheck"><MoneyInput value={grossPerPaycheck} onChange={setGrossPerPaycheck} /></Field>
         </div>
         <Field label="Pay frequency">
           <select className="input" value={payFrequency} onChange={(e) => setPayFrequency(e.target.value as PayFrequency)}>
@@ -211,7 +211,7 @@ function IncomeModal({
           <div key={i} style={{ marginBottom: 8 }}>
             <div className="field-row">
               <input className="input" placeholder="e.g. 401k" value={d.name} onChange={(e) => setDeductions(deductions.map((x, j) => j === i ? { ...x, name: e.target.value } : x))} />
-              <input className="input num" type="number" step="0.01" placeholder="Amount" value={d.amount} onChange={(e) => setDeductions(deductions.map((x, j) => j === i ? { ...x, amount: e.target.value } : x))} />
+              <MoneyInput value={d.amount} onChange={(v) => setDeductions(deductions.map((x, j) => j === i ? { ...x, amount: v } : x))} placeholder="Amount" />
               <button type="button" className="iconbtn" onClick={() => setDeductions(deductions.filter((_, j) => j !== i))}>✕</button>
             </div>
             <div className="field-row" style={{ marginTop: 4 }}>
@@ -234,7 +234,7 @@ function IncomeModal({
               <option value="">Select account</option>
               {accounts.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
             </select>
-            <input className="input num" type="number" step="0.01" placeholder="Amount" value={d.amount} onChange={(e) => setDists(dists.map((x, j) => j === i ? { ...x, amount: e.target.value } : x))} />
+            <MoneyInput value={d.amount} onChange={(v) => setDists(dists.map((x, j) => j === i ? { ...x, amount: v } : x))} placeholder="Amount" />
             <button type="button" className="iconbtn" onClick={() => setDists(dists.filter((_, j) => j !== i))}>✕</button>
           </div>
         ))}

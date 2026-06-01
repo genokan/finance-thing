@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { Link } from 'react-router-dom'
 import { api } from '../api/client'
 import type { Dashboard as DashboardData, Insights } from '../api/types'
 import { Bar, Card, Loading, SectionHead, Stat } from '../components/ui'
@@ -34,52 +35,67 @@ export function Dashboard() {
   const d = dash.data
   const i = insights.data
   const surplus = d.netMonthlyIncome - d.totalExpenses
+  const savingsRate = d.netMonthlyIncome > 0 ? (surplus / d.netMonthlyIncome) * 100 : 0
   const now = new Date()
 
   return (
     <div>
       <div className="topbar">
-        <div>
-          <div className="hero">
-            <div className="label">Liquid net worth</div>
-            <div className={`value num ${d.liquidNetWorth >= 0 ? '' : 'neg'}`}>{money(d.liquidNetWorth)}</div>
-            <div className="sub num">
-              Total incl. unvested RSUs: <span className="accent">{money(d.totalNetWorth)}</span>
-            </div>
+        <div className="hero">
+          <div className="label">Liquid net worth</div>
+          <div className={`value num ${d.liquidNetWorth >= 0 ? '' : 'neg'}`}>{money(d.liquidNetWorth)}</div>
+          <div className="sub num">
+            Total incl. unvested RSUs: <span className="accent">{money(d.totalNetWorth)}</span>
           </div>
         </div>
-        <button className="btn" onClick={() => record.mutate()} disabled={record.isPending}>
-          {record.isPending ? 'Recording…' : `Record ${monthLabel(now.getFullYear(), now.getMonth() + 1)}`}
+        <button className="btn ghost" onClick={() => record.mutate()} disabled={record.isPending}>
+          {record.isPending ? 'Recording…' : `Snapshot ${monthLabel(now.getFullYear(), now.getMonth() + 1)}`}
         </button>
       </div>
 
-      {record.isSuccess && <div className="dim" style={{ marginBottom: 8 }}>Snapshot saved.</div>}
+      {record.isSuccess && <div className="dim" style={{ marginBottom: 8 }}>Snapshot saved to History.</div>}
       {record.isError && <div className="error-text">Could not record snapshot.</div>}
 
-      <div className="grid cols-3" style={{ marginTop: 16 }}>
-        <Stat label="Net monthly income" value={money(d.netMonthlyIncome)} />
-        <Stat label="Monthly outflow" value={money(d.totalExpenses)} />
-        <Stat label="Monthly surplus" value={money(surplus)} tone={surplus >= 0 ? 'pos' : 'neg'} />
+      {/* Monthly cash flow — the CSV's "Net Income / Expenses / Savings" summary */}
+      <SectionHead title="Monthly cash flow" />
+      <div className="grid cols-4">
+        <Stat label="Net income" value={money(d.netMonthlyIncome)} sub="after taxes / month" to="/income" />
+        <Stat label="Outflow" value={money(d.totalExpenses)} sub="recurring expenses" to="/expenses" />
+        <Stat
+          label="Surplus"
+          value={money(surplus)}
+          tone={surplus >= 0 ? 'pos' : 'neg'}
+          sub={`${percent(savingsRate)} of income`}
+          to="/budgets"
+        />
+        <Stat label="Total debt" value={money(d.totalDebt)} tone={d.totalDebt > 0 ? 'neg' : undefined} sub="balances owed" to="/debt" />
       </div>
 
-      <div className="grid cols-3" style={{ marginTop: 14 }}>
-        <Stat label="Liquid cash" value={money(d.liquidCash)} />
-        <Stat label="Vested investments" value={money(d.vestedInvestments)} />
-        <Stat label="Unvested RSUs" value={money(d.unvestedRSUs)} />
+      {/* Net-worth composition — the CSV's "Cash Total / Investment Total" buckets */}
+      <SectionHead title="Net worth breakdown" />
+      <div className="grid cols-4">
+        <Stat label="Liquid cash" value={money(d.liquidCash)} sub="checking / savings" to="/accounts" />
+        <Stat label="Vested investments" value={money(d.vestedInvestments)} sub="brokerage / retirement" to="/investments" />
+        <Stat label="Unvested RSUs" value={money(d.unvestedRSUs)} sub="not yet vested" to="/investments" />
+        <Stat label="Debt" value={money(-d.totalDebt)} tone={d.totalDebt > 0 ? 'neg' : undefined} sub="reduces net worth" to="/debt" />
       </div>
 
-      <SectionHead title="50 / 30 / 20" />
+      {/* 50/30/20 — needs / wants / savings, with dollar amounts */}
+      <SectionHead title="50 / 30 / 20 budget" action={<Link to="/budgets" className="dim" style={{ fontSize: 13 }}>Manage →</Link>} />
       <Card>
-        <BudgetBar label="Needs (essential)" pct={d.fiftyThirtyTwenty.needsPercent} target={50} tone="accent" />
-        <BudgetBar label="Wants (discretionary)" pct={d.fiftyThirtyTwenty.wantsPercent} target={30} tone="accent" />
-        <BudgetBar label="Savings / surplus" pct={d.fiftyThirtyTwenty.savingsPercent} target={20} tone="pos" />
+        <BudgetSplit
+          needs={d.essentialExpenses}
+          wants={d.discretionaryExpenses}
+          savings={Math.max(0, surplus)}
+          ftt={d.fiftyThirtyTwenty}
+        />
       </Card>
 
       {i && (
         <>
           <SectionHead title="Financial insights" />
           <div className="grid cols-2">
-            <Card>
+            <Link to="/accounts" className="card stat-card clickable">
               <div className="stat-label">Emergency fund</div>
               <div className="stat-value num">
                 {i.emergencyFund.monthsCovered.toFixed(1)} mo{' '}
@@ -92,21 +108,23 @@ export function Dashboard() {
                 </span>
               </div>
               <div className="dim num" style={{ marginTop: 6, fontSize: 13 }}>
-                {money(i.emergencyFund.liquidCash)} cash / {money(i.emergencyFund.monthlyEssentialExpenses)} essential
-                per mo. Target 3–6 months.
+                {money(i.emergencyFund.liquidCash)} {i.emergencyFund.designated ? 'in your emergency fund' : 'liquid cash'} /{' '}
+                {money(i.emergencyFund.monthlyEssentialExpenses)} essential per mo. Target 3–6 months.
               </div>
-            </Card>
+              <span className="stat-arrow">→</span>
+            </Link>
 
-            <Card>
+            <Link to="/settings" className="card stat-card clickable">
               <div className="stat-label">Benchmark safe rate</div>
               <div className="stat-value num accent">{percent(i.benchmarkRate, 2)}</div>
               <div className="dim" style={{ marginTop: 6, fontSize: 13 }}>
-                Debt opportunity cost is measured against this rate. Set it in Settings.
+                Debt opportunity cost is measured against this rate. Click to adjust in Settings.
               </div>
-            </Card>
+              <span className="stat-arrow">→</span>
+            </Link>
           </div>
 
-          <SectionHead title="Debt opportunity cost" />
+          <SectionHead title="Debt opportunity cost" action={<Link to="/debt" className="dim" style={{ fontSize: 13 }}>View debts →</Link>} />
           <Card>
             {i.debtAnalysis.length === 0 ? (
               <div className="dim">No active debts to analyze.</div>
@@ -154,7 +172,7 @@ export function Dashboard() {
                     <div className="body">
                       <div className="t">0% promo ending: {p.name}</div>
                       <div className="d num">
-                        {p.daysRemaining} days left ({dateLabel(p.payoffDate)}). Rate jumps to {percent(p.promoApr, 2)}.
+                        {p.daysRemaining} days left ({dateLabel(p.promoEndsAt)}). Rate jumps to {percent(p.postPromoApr, 2)}.
                       </div>
                     </div>
                   </div>
@@ -183,6 +201,39 @@ export function Dashboard() {
           </Card>
         </>
       )}
+    </div>
+  )
+}
+
+function BudgetSplit({
+  needs,
+  wants,
+  savings,
+  ftt,
+}: {
+  needs: number
+  wants: number
+  savings: number
+  ftt: { needsPercent: number; wantsPercent: number; savingsPercent: number }
+}) {
+  const total = needs + wants + savings || 1
+  const w = (n: number) => `${Math.max(0, (n / total) * 100)}%`
+  return (
+    <div>
+      <div className="meter">
+        <span style={{ width: w(needs), background: 'linear-gradient(90deg, var(--accent-dim), var(--accent))' }} />
+        <span style={{ width: w(wants), background: 'linear-gradient(90deg, var(--indigo), #9d90ff)' }} />
+        <span style={{ width: w(savings), background: 'linear-gradient(90deg, #1f9e76, var(--positive))' }} />
+      </div>
+      <div className="legend" style={{ marginBottom: 18 }}>
+        <span><span className="dot" style={{ background: 'var(--accent)' }} />Needs {money(needs)}</span>
+        <span><span className="dot" style={{ background: 'var(--indigo)' }} />Wants {money(wants)}</span>
+        <span><span className="dot" style={{ background: 'var(--positive)' }} />Savings {money(savings)}</span>
+      </div>
+
+      <BudgetBar label="Needs (essential)" pct={ftt.needsPercent} target={50} tone="accent" />
+      <BudgetBar label="Wants (discretionary)" pct={ftt.wantsPercent} target={30} tone="accent" />
+      <BudgetBar label="Savings / surplus" pct={ftt.savingsPercent} target={20} tone="pos" />
     </div>
   )
 }

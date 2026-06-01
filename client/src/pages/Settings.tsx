@@ -2,14 +2,12 @@ import { useEffect, useState, type FormEvent } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api, ApiError } from '../api/client'
 import type { FilingStatus, ManagedUser, Settings } from '../api/types'
-import { useAuth } from '../auth/AuthContext'
 import { Card, Field, Loading, Modal, SectionHead } from '../components/ui'
 import { dateLabel } from '../lib/format'
 import { PASSWORD_RULES, validatePassword } from '../lib/password'
 
 export function SettingsPage() {
   const qc = useQueryClient()
-  const { logout } = useAuth()
   const settings = useQuery({ queryKey: ['settings'], queryFn: () => api.get<Settings>('/api/settings') })
 
   const [rate, setRate] = useState('')
@@ -85,11 +83,6 @@ export function SettingsPage() {
       </p>
 
       {settings.data?.isAdmin && <UsersSection />}
-
-      <SectionHead title="Account" />
-      <Card>
-        <button className="btn ghost" onClick={() => logout()}>Sign out</button>
-      </Card>
     </div>
   )
 }

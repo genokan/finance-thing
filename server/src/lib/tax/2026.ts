@@ -1,6 +1,6 @@
 // Federal tax constants. Based on 2025 IRS figures as the working baseline for
 // 2026 estimates — update these yearly. All values are annual USD.
-import type { FilingStatus } from '@prisma/client'
+import type { FilingStatus } from '../../generated/prisma/client'
 
 export interface Bracket {
   upTo: number // upper bound of this bracket (Infinity for the top)

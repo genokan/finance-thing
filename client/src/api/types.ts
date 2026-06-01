@@ -4,7 +4,8 @@ export type CategoryScope = 'EXPENSE' | 'INCOME' | 'DEBT' | 'ANY'
 export type ExpenseKind = 'RECURRING' | 'ONE_TIME'
 export type AccountKind =
   | 'CHECKING' | 'SAVINGS' | 'MONEY_MARKET' | 'BROKERAGE' | 'IRA' | 'ROTH_IRA'
-  | 'PLAN_401K' | 'DEFINED_CONTRIBUTION' | 'HSA' | 'RSU' | 'OTHER'
+  | 'PLAN_401K' | 'DEFINED_CONTRIBUTION' | 'HSA' | 'RSU'
+  | 'CREDIT_CARD' | 'LOAN' | 'LINE_OF_CREDIT' | 'MORTGAGE' | 'OTHER'
 export type TrackingMode = 'BALANCE' | 'HOLDINGS'
 export type IncomeType = 'W2' | 'SELF_1099' | 'OTHER'
 export type PayFrequency = 'WEEKLY' | 'BIWEEKLY' | 'SEMIMONTHLY' | 'MONTHLY' | 'ANNUAL'
@@ -46,6 +47,7 @@ export interface Account {
   kind: AccountKind
   trackingMode: TrackingMode
   balance: string
+  isEmergencyFund: boolean
   institutionId: string | null
   institution: Institution | null
   holdings: Holding[]
@@ -62,6 +64,7 @@ export interface Expense {
   intervalCount: number
   intervalUnit: IntervalUnit
   dueDate: string | null
+  bucket: BudgetBucket | null
   categoryId: string | null
   category: Category | null
   notes: string | null
@@ -120,10 +123,19 @@ export interface Debt {
   name: string
   term: DebtTerm
   kind: DebtKind
+  bucket: BudgetBucket | null
   categoryId: string | null
   category: Category | null
+  accountId: string | null
+  account: Account | null
   principal: string
   monthlyPayment: string
+  termMonths: number | null
+  // computed by the server
+  principalValue: number
+  minimumPayment: number
+  actualPayment: number
+  effectivePayment: number
   apr: string
   institutionId: string | null
   institution: Institution | null
@@ -146,6 +158,7 @@ export interface Dashboard {
   essentialExpenses: number
   discretionaryExpenses: number
   debtPayments: number
+  totalDebt: number
   fiftyThirtyTwenty: { needsPercent: number; wantsPercent: number; savingsPercent: number }
   recentSnapshots: { year: number; month: number; netWorth: string; liquidNetWorth: string | null }[]
   upcomingAlerts: { id: string; name: string; kind: ExpenseKind; dueDate: string | null; expiresAt: string | null; renewsAt: string | null }[]
@@ -154,7 +167,7 @@ export interface Dashboard {
 export interface Insights {
   benchmarkRate: number
   debtAnalysis: { id: string; name: string; apr: number; benchmark: number; opportunityCostPercent: number; verdict: 'PAY_OFF' | 'BALANCED' | 'KEEP' }[]
-  emergencyFund: { liquidCash: number; monthlyEssentialExpenses: number; monthsCovered: number; status: 'ADEQUATE' | 'MINIMUM' | 'LOW' }
+  emergencyFund: { liquidCash: number; monthlyEssentialExpenses: number; monthsCovered: number; status: 'ADEQUATE' | 'MINIMUM' | 'LOW'; designated: boolean }
   promoAlerts: { id: string; name: string; promoEndsAt: string; postPromoApr: number; daysRemaining: number }[]
   highAprDebts: { id: string; name: string; apr: number; principal: number }[]
 }

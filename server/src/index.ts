@@ -1,3 +1,4 @@
+import './lib/env'
 import { createApp } from './app'
 import { startScheduler } from './lib/scheduler'
 

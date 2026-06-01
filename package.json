@@ -2,13 +2,19 @@
   "name": "finance-thing",
   "version": "0.1.0",
   "private": true,
+  "workspaces": [
+    "server",
+    "client"
+  ],
   "scripts": {
     "dev": "concurrently -n server,client -c yellow,cyan \"npm:dev:server\" \"npm:dev:client\"",
-    "dev:server": "PORT=3001 npm --prefix server run dev",
-    "dev:client": "npm --prefix client run dev",
-    "build": "npm --prefix client run build && npm --prefix server run build",
-    "seed": "npm --prefix server run db:seed",
-    "install:all": "npm install && npm --prefix server install && npm --prefix client install"
+    "dev:server": "PORT=3001 npm run dev -w server",
+    "dev:client": "npm run dev -w client",
+    "build": "npm run build -w client && npm run build -w server",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present",
+    "check": "concurrently -s all -n typecheck,test -c blue,green \"npm:typecheck\" \"npm:test\"",
+    "seed": "npm run db:seed -w server"
   },
   "devDependencies": {
     "concurrently": "^9.0.1"

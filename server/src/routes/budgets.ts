@@ -1,7 +1,7 @@
 import { Router } from 'express'
 import { prisma } from '../lib/prisma'
 import { toMonthlyEquivalent } from '../lib/monthlyEquivalent'
-import type { IntervalUnit } from '@prisma/client'
+import type { BudgetBucket, IntervalUnit } from '../generated/prisma/client'
 
 export const budgetsRouter = Router()
 
@@ -20,13 +20,14 @@ budgetsRouter.get('/', async (req, res) => {
   const monthlyOf = (amount: unknown, count: number, unit: IntervalUnit) =>
     toMonthlyEquivalent(Number(amount), count, unit)
 
+  // Bucket (Needs/Wants/Savings) lives on the expense itself; category is an
+  // optional sub-tag used only for the per-category budget-vs-actual lines.
   const actualByCategory = new Map<string, number>()
+  const actualByBucket: Record<BudgetBucket, number> = { ESSENTIAL: 0, DISCRETIONARY: 0, SAVINGS: 0 }
   for (const e of expenses) {
-    if (!e.categoryId) continue
-    actualByCategory.set(
-      e.categoryId,
-      (actualByCategory.get(e.categoryId) ?? 0) + monthlyOf(e.amount, e.intervalCount, e.intervalUnit),
-    )
+    const monthly = monthlyOf(e.amount, e.intervalCount, e.intervalUnit)
+    if (e.bucket) actualByBucket[e.bucket] += monthly
+    if (e.categoryId) actualByCategory.set(e.categoryId, (actualByCategory.get(e.categoryId) ?? 0) + monthly)
   }
 
   const lines = categories.map((c) => ({
@@ -49,7 +50,7 @@ budgetsRouter.get('/', async (req, res) => {
   }, 0)
 
   const buckets = (['ESSENTIAL', 'DISCRETIONARY', 'SAVINGS'] as const).map((bucket) => {
-    const actual = lines.filter((l) => l.bucket === bucket).reduce((s, l) => s + l.actual, 0)
+    const actual = actualByBucket[bucket]
     return {
       bucket,
       actual: r2(actual),

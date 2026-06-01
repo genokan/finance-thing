@@ -40,5 +40,11 @@ node_modules/
 dist/
 *.tsbuildinfo
 
+# Prisma generated client (run `npx prisma generate`)
+server/src/generated/
+
 # Built frontend (emitted by Vite into the server for static serving)
 server/public/
+
+# Claude Code local files (project memory, personal notes) — never publish
+.claude/

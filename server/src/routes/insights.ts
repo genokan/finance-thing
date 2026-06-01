@@ -2,7 +2,7 @@ import { Router } from 'express'
 import { prisma } from '../lib/prisma'
 import { toMonthlyEquivalent } from '../lib/monthlyEquivalent'
 import { accountValue, isCashKind } from '../lib/accountValue'
-import type { IntervalUnit } from '@prisma/client'
+import type { IntervalUnit } from '../generated/prisma/client'
 
 export const insightsRouter = Router()
 
@@ -18,8 +18,8 @@ insightsRouter.get('/', async (req, res) => {
   const uid = req.userId
   const [user, debts, expenses, accounts] = await Promise.all([
     prisma.user.findUnique({ where: { id: uid } }),
-    prisma.debt.findMany({ where: { userId: uid, isActive: true } }),
-    prisma.expenseItem.findMany({ where: { userId: uid, isActive: true, kind: 'RECURRING' }, include: { category: true } }),
+    prisma.debt.findMany({ where: { userId: uid, isActive: true }, include: { account: true } }),
+    prisma.expenseItem.findMany({ where: { userId: uid, isActive: true, kind: 'RECURRING' } }),
     prisma.account.findMany({ where: { userId: uid, isActive: true }, include: { holdings: { where: { isActive: true } } } }),
   ])
 
@@ -30,11 +30,17 @@ insightsRouter.get('/', async (req, res) => {
     return { id: d.id, name: d.name, apr, benchmark, opportunityCostPercent: Math.round((apr - benchmark) * 100) / 100, verdict: verdict(apr, benchmark) }
   })
 
-  const liquidCash = accounts.filter((a) => isCashKind(a.kind)).reduce((s, a) => s + accountValue(a), 0)
+  // If the user has designated specific emergency-fund account(s), use those;
+  // otherwise fall back to all liquid cash.
+  const designatedAccounts = accounts.filter((a) => a.isEmergencyFund)
+  const designated = designatedAccounts.length > 0
+  const emergencyCash = designated
+    ? designatedAccounts.reduce((s, a) => s + accountValue(a), 0)
+    : accounts.filter((a) => isCashKind(a.kind)).reduce((s, a) => s + accountValue(a), 0)
   const monthlyEssential = expenses
-    .filter((e) => e.category?.bucket === 'ESSENTIAL')
+    .filter((e) => e.bucket === 'ESSENTIAL')
     .reduce((s, e) => s + toMonthlyEquivalent(Number(e.amount), e.intervalCount, e.intervalUnit as IntervalUnit), 0)
-  const monthsCovered = monthlyEssential > 0 ? liquidCash / monthlyEssential : 0
+  const monthsCovered = monthlyEssential > 0 ? emergencyCash / monthlyEssential : 0
 
   const now = new Date()
   const sixtyOut = new Date(now.getTime() + 60 * 86400000)
@@ -47,12 +53,15 @@ insightsRouter.get('/', async (req, res) => {
     benchmarkRate: benchmark,
     debtAnalysis,
     emergencyFund: {
-      liquidCash: Math.round(liquidCash * 100) / 100,
+      liquidCash: Math.round(emergencyCash * 100) / 100,
       monthlyEssentialExpenses: Math.round(monthlyEssential * 100) / 100,
       monthsCovered: Math.round(monthsCovered * 10) / 10,
       status: monthsCovered >= 6 ? 'ADEQUATE' : monthsCovered >= 3 ? 'MINIMUM' : 'LOW',
+      designated,
     },
     promoAlerts,
-    highAprDebts: debts.filter((d) => Number(d.apr) > 7.5).map((d) => ({ id: d.id, name: d.name, apr: Number(d.apr), principal: Number(d.principal) })),
+    highAprDebts: debts
+      .filter((d) => Number(d.apr) > 7.5)
+      .map((d) => ({ id: d.id, name: d.name, apr: Number(d.apr), principal: d.account ? Number(d.account.balance) : Number(d.principal) })),
   })
 })

@@ -1,9 +1,10 @@
 import { Router } from 'express'
 import { prisma } from '../lib/prisma'
 import { toMonthlyEquivalent } from '../lib/monthlyEquivalent'
-import { accountValue, accountUnvested, isCashKind } from '../lib/accountValue'
+import { accountValue, accountUnvested, isCashKind, isLiabilityKind } from '../lib/accountValue'
+import { debtPaymentInfo } from '../lib/debtPayment'
 import { estimateTax } from '../services/tax'
-import type { IntervalUnit } from '@prisma/client'
+import type { IntervalUnit } from '../generated/prisma/client'
 
 export const dashboardRouter = Router()
 
@@ -14,18 +15,24 @@ dashboardRouter.get('/', async (req, res) => {
   const [user, accounts, expenses, incomeSources, debts, snapshots] = await Promise.all([
     prisma.user.findUnique({ where: { id: uid }, select: { filingStatus: true, stateRate: true } }),
     prisma.account.findMany({ where: { userId: uid, isActive: true }, include: { holdings: { where: { isActive: true } } } }),
-    prisma.expenseItem.findMany({ where: { userId: uid, isActive: true }, include: { category: true } }),
+    prisma.expenseItem.findMany({ where: { userId: uid, isActive: true } }),
     prisma.incomeSource.findMany({ where: { userId: uid, isActive: true }, include: { deductions: true } }),
-    prisma.debt.findMany({ where: { userId: uid, isActive: true } }),
+    prisma.debt.findMany({ where: { userId: uid, isActive: true }, include: { account: true } }),
     prisma.monthlySnapshot.findMany({ where: { userId: uid }, orderBy: [{ year: 'desc' }, { month: 'desc' }], take: 2, select: { year: true, month: true, netWorth: true, liquidNetWorth: true } }),
   ])
 
   const defaults = { filingStatus: user?.filingStatus ?? null, stateRate: user?.stateRate != null ? Number(user.stateRate) : null }
 
   const liquidCash = accounts.filter((a) => isCashKind(a.kind)).reduce((s, a) => s + accountValue(a), 0)
-  const vestedInvestments = accounts.filter((a) => !isCashKind(a.kind)).reduce((s, a) => s + accountValue(a), 0)
+  const vestedInvestments = accounts
+    .filter((a) => !isCashKind(a.kind) && !isLiabilityKind(a.kind))
+    .reduce((s, a) => s + accountValue(a), 0)
   const unvestedRSUs = accounts.reduce((s, a) => s + accountUnvested(a), 0)
-  const totalDebtPrincipal = debts.reduce((s, d) => s + Number(d.principal), 0)
+  // Liability accounts subtract directly; a debt that links an account is already
+  // captured by that account, so only unlinked debts add their own principal.
+  const liabilityAccounts = accounts.filter((a) => isLiabilityKind(a.kind)).reduce((s, a) => s + accountValue(a), 0)
+  const unlinkedDebtPrincipal = debts.filter((d) => !d.accountId).reduce((s, d) => s + Number(d.principal), 0)
+  const totalDebtPrincipal = liabilityAccounts + unlinkedDebtPrincipal
   const liquidNetWorth = liquidCash + vestedInvestments - totalDebtPrincipal
   const totalNetWorth = liquidNetWorth + unvestedRSUs
 
@@ -34,10 +41,10 @@ dashboardRouter.get('/', async (req, res) => {
 
   const monthlyOf = (amount: unknown, c: number, u: IntervalUnit) => toMonthlyEquivalent(Number(amount), c, u)
   const recurring = expenses.filter((e) => e.kind === 'RECURRING')
-  const essential = recurring.filter((e) => e.category?.bucket === 'ESSENTIAL').reduce((s, e) => s + monthlyOf(e.amount, e.intervalCount, e.intervalUnit), 0)
-  const discretionary = recurring.filter((e) => e.category?.bucket === 'DISCRETIONARY').reduce((s, e) => s + monthlyOf(e.amount, e.intervalCount, e.intervalUnit), 0)
-  const uncategorized = recurring.filter((e) => !e.category).reduce((s, e) => s + monthlyOf(e.amount, e.intervalCount, e.intervalUnit), 0)
-  const debtPayments = debts.reduce((s, d) => s + Number(d.monthlyPayment), 0)
+  const essential = recurring.filter((e) => e.bucket === 'ESSENTIAL').reduce((s, e) => s + monthlyOf(e.amount, e.intervalCount, e.intervalUnit), 0)
+  const discretionary = recurring.filter((e) => e.bucket === 'DISCRETIONARY').reduce((s, e) => s + monthlyOf(e.amount, e.intervalCount, e.intervalUnit), 0)
+  const uncategorized = recurring.filter((e) => !e.bucket).reduce((s, e) => s + monthlyOf(e.amount, e.intervalCount, e.intervalUnit), 0)
+  const debtPayments = debts.reduce((s, d) => s + debtPaymentInfo(d).effectivePayment, 0)
   const totalExpenses = essential + discretionary + uncategorized + debtPayments
 
   const now = new Date()
@@ -59,6 +66,7 @@ dashboardRouter.get('/', async (req, res) => {
     essentialExpenses: r2(essential),
     discretionaryExpenses: r2(discretionary),
     debtPayments: r2(debtPayments),
+    totalDebt: r2(totalDebtPrincipal),
     fiftyThirtyTwenty: {
       needsPercent: denom > 0 ? r2(((essential + debtPayments) / denom) * 100) : 0,
       wantsPercent: denom > 0 ? r2((discretionary / denom) * 100) : 0,

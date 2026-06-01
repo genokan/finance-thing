@@ -2,7 +2,7 @@ import { useState, type FormEvent } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from '../api/client'
 import type { BudgetBucket, BudgetOverview, Category } from '../api/types'
-import { Bar, Card, Field, Loading, Modal, SectionHead } from '../components/ui'
+import { Bar, Card, Field, Loading, MoneyInput, Modal, SectionHead } from '../components/ui'
 import { money, percent } from '../lib/format'
 
 const BUCKETS: { key: BudgetBucket; label: string; target: number; tone: string }[] = [
@@ -27,6 +27,7 @@ export function Budgets() {
     onSuccess: () => { invalidate(); setModal({ open: false, editing: null }) },
   })
   const remove = useMutation({ mutationFn: (id: string) => api.del(`/api/categories/${id}`), onSuccess: invalidate })
+  const seedDefaults = useMutation({ mutationFn: () => api.post('/api/categories/seed-defaults'), onSuccess: invalidate })
 
   if (overview.isLoading || categories.isLoading) return <Loading />
   const ov = overview.data!
@@ -60,8 +61,18 @@ export function Budgets() {
 
       <SectionHead
         title="Categories"
-        action={<button className="btn sm" onClick={() => setModal({ open: true, editing: null })}>+ Add category</button>}
+        action={
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button className="btn ghost sm" onClick={() => seedDefaults.mutate()} disabled={seedDefaults.isPending}>
+              {seedDefaults.isPending ? 'Adding…' : 'Add common categories'}
+            </button>
+            <button className="btn sm" onClick={() => setModal({ open: true, editing: null })}>+ Add category</button>
+          </div>
+        }
       />
+      <p className="page-sub" style={{ marginTop: -4 }}>
+        Categories work without budgets — a monthly target is optional. Use “Add common categories” for a starter set.
+      </p>
       <Card>
         <div className="list">
           {parents.map((p) => (
@@ -154,7 +165,7 @@ function CategoryModal({
             </select>
           </Field>
           <Field label="Monthly budget (optional)">
-            <input className="input num" type="number" step="0.01" min="0" value={monthlyBudget} onChange={(e) => setMonthlyBudget(e.target.value)} />
+            <MoneyInput value={monthlyBudget} onChange={setMonthlyBudget} />
           </Field>
         </div>
         <Field label="Parent category (optional)">

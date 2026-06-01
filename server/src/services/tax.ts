@@ -1,4 +1,4 @@
-import type { FilingStatus, IncomeSource, IncomeDeduction, PayFrequency, TaxMode } from '@prisma/client'
+import type { FilingStatus, IncomeSource, IncomeDeduction, PayFrequency, TaxMode } from '../generated/prisma/client'
 import {
   STANDARD_DEDUCTION,
   SS_RATE,

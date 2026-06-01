@@ -1,5 +1,5 @@
 import { Configuration, PlaidApi, PlaidEnvironments, Products, CountryCode } from 'plaid'
-import type { AccountKind } from '@prisma/client'
+import type { AccountKind } from '../generated/prisma/client'
 import { encrypt, decrypt } from '../lib/crypto'
 import { prisma } from '../lib/prisma'
 
@@ -11,7 +11,10 @@ function client() {
   }))
 }
 
-function mapKind(subtype: string | null | undefined): AccountKind {
+function mapKind(type: string | null | undefined, subtype: string | null | undefined): AccountKind {
+  // Liabilities first — these are what Plaid returns for cards and loans.
+  if (type === 'credit') return 'CREDIT_CARD'
+  if (type === 'loan') return subtype === 'mortgage' ? 'MORTGAGE' : subtype === 'line of credit' ? 'LINE_OF_CREDIT' : 'LOAN'
   switch (subtype) {
     case 'checking': return 'CHECKING'
     case 'savings': return 'SAVINGS'
@@ -21,6 +24,7 @@ function mapKind(subtype: string | null | undefined): AccountKind {
     case 'roth': return 'ROTH_IRA'
     case '401k': return 'PLAN_401K'
     case 'brokerage': return 'BROKERAGE'
+    case 'credit card': return 'CREDIT_CARD'
     default: return 'OTHER'
   }
 }
@@ -67,7 +71,7 @@ export async function syncAllBalances(userId: string): Promise<{ synced: number;
             data: {
               userId,
               name: acct.name,
-              kind: mapKind(acct.subtype),
+              kind: mapKind(acct.type, acct.subtype),
               trackingMode: 'BALANCE',
               balance,
               institutionId: item.institutionId,
