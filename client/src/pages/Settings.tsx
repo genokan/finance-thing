@@ -1,8 +1,8 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api, ApiError } from '../api/client'
-import type { FilingStatus, ManagedUser, Settings } from '../api/types'
-import { Card, Field, Loading, Modal, SectionHead } from '../components/ui'
+import type { FilingStatus, ManagedInstitution, ManagedUser, Settings } from '../api/types'
+import { Card, Empty, Field, Loading, Modal, SectionHead } from '../components/ui'
 import { dateLabel } from '../lib/format'
 import { PASSWORD_RULES, validatePassword } from '../lib/password'
 
@@ -78,6 +78,8 @@ export function SettingsPage() {
 
       <ChangePasswordSection />
 
+      <InstitutionsSection />
+
       <p className="dim" style={{ marginTop: 18, fontSize: 13 }}>
         Connect banks via Plaid on the <strong>Accounts</strong> page.
       </p>
@@ -148,6 +150,80 @@ function ChangePasswordSection() {
         </button>
       </form>
     </>
+  )
+}
+
+function InstitutionsSection() {
+  const qc = useQueryClient()
+  const institutions = useQuery({ queryKey: ['institutions'], queryFn: () => api.get<ManagedInstitution[]>('/api/institutions') })
+  const [renaming, setRenaming] = useState<ManagedInstitution | null>(null)
+
+  const remove = useMutation({
+    mutationFn: (id: string) => api.del(`/api/institutions/${id}`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['institutions'] }),
+  })
+
+  const list = institutions.data ?? []
+
+  return (
+    <>
+      <SectionHead title="Institutions" />
+      <p className="page-sub" style={{ marginTop: -4 }}>
+        Created automatically when you add accounts. Rename to tidy duplicates; delete only when nothing links to them.
+      </p>
+      <Card>
+        {institutions.isLoading ? (
+          <div className="dim">Loading…</div>
+        ) : !list.length ? (
+          <Empty>No institutions yet. They appear here once you add accounts.</Empty>
+        ) : (
+          <div className="list">
+            {list.map((inst) => {
+              const uses = inst._count.accounts + inst._count.debts + inst._count.plaidItems
+              return (
+                <div className="row" key={inst.id}>
+                  <div className="main">
+                    <div className="name">{inst.name}</div>
+                    <div className="meta">{uses === 0 ? 'unused' : `${uses} linked account${uses === 1 ? '' : 's'}`}</div>
+                  </div>
+                  <div className="right">
+                    <button className="btn ghost sm" onClick={() => setRenaming(inst)}>Rename</button>
+                    <button className="iconbtn" title="Delete institution" onClick={() => remove.mutate(inst.id)}>✕</button>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        )}
+      </Card>
+
+      {renaming && <RenameInstitutionModal institution={renaming} onClose={() => setRenaming(null)} />}
+    </>
+  )
+}
+
+function RenameInstitutionModal({ institution, onClose }: { institution: ManagedInstitution; onClose: () => void }) {
+  const qc = useQueryClient()
+  const [name, setName] = useState(institution.name)
+  const rename = useMutation({
+    mutationFn: () => api.put(`/api/institutions/${institution.id}`, { name }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['institutions'] })
+      qc.invalidateQueries({ queryKey: ['accounts'] })
+      onClose()
+    },
+  })
+
+  return (
+    <Modal title={`Rename — ${institution.name}`} onClose={onClose}>
+      <form onSubmit={(e) => { e.preventDefault(); rename.mutate() }}>
+        <Field label="Name"><input className="input" value={name} onChange={(e) => setName(e.target.value)} required autoFocus /></Field>
+        <div className="modal-actions">
+          <button type="button" className="btn ghost" onClick={onClose}>Cancel</button>
+          <button type="submit" className="btn" disabled={rename.isPending || !name.trim()}>{rename.isPending ? 'Saving…' : 'Save'}</button>
+        </div>
+      </form>
+    </Modal>
   )
 }
 

@@ -19,6 +19,10 @@ export interface Institution {
   name: string
 }
 
+export interface ManagedInstitution extends Institution {
+  _count: { accounts: number; debts: number; plaidItems: number }
+}
+
 export interface Category {
   id: string
   name: string
