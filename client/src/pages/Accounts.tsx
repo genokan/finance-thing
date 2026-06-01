@@ -1,8 +1,8 @@
 import { useMemo, useState, type FormEvent } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api, ApiError } from '../api/client'
-import type { Account, AccountKind, Holding, Institution, TrackingMode } from '../api/types'
-import { Card, Empty, Field, Loading, MoneyInput, Modal, SectionHead } from '../components/ui'
+import type { Account, AccountKind, BudgetBucket, DebtKind, DebtTerm, Holding, Institution, TrackingMode } from '../api/types'
+import { BucketSelect, Card, Empty, Field, Loading, MoneyInput, Modal, SectionHead } from '../components/ui'
 import { PlaidConnect } from '../components/PlaidConnect'
 import { dateLabel, money } from '../lib/format'
 
@@ -25,6 +25,11 @@ export const isInvestmentKind = (k: AccountKind) => INVESTMENT_KINDS.includes(k)
 const APY_KINDS: AccountKind[] = ['SAVINGS', 'MONEY_MARKET']
 const hasApy = (k: AccountKind) => APY_KINDS.includes(k)
 
+// Reasonable default debt kind when a liability account spawns its debt.
+const ACCOUNT_TO_DEBT_KIND: Partial<Record<AccountKind, DebtKind>> = {
+  CREDIT_CARD: 'CREDIT_CARD', MORTGAGE: 'MORTGAGE', LOAN: 'PERSONAL', LINE_OF_CREDIT: 'OTHER',
+}
+
 async function resolveInstitution(name: string, existing: Institution[]): Promise<string | undefined> {
   const trimmed = name.trim()
   if (!trimmed) return undefined
@@ -46,11 +51,18 @@ export function Accounts() {
     qc.invalidateQueries({ queryKey: ['accounts'] })
     qc.invalidateQueries({ queryKey: ['dashboard'] })
     qc.invalidateQueries({ queryKey: ['institutions'] })
+    qc.invalidateQueries({ queryKey: ['debts'] })
   }
 
   const saveAccount = useMutation({
-    mutationFn: (p: { id?: string; body: Record<string, unknown> }) =>
-      p.id ? api.put(`/api/accounts/${p.id}`, p.body) : api.post('/api/accounts', p.body),
+    // On create, a liability account can spawn its linked Debt in the same step
+    // ("enter once"): create the account, then the debt pointing at it.
+    mutationFn: async (p: { id?: string; body: Record<string, unknown>; debt?: Record<string, unknown> }) => {
+      if (p.id) return api.put(`/api/accounts/${p.id}`, p.body)
+      const account = await api.post<Account>('/api/accounts', p.body)
+      if (p.debt) await api.post('/api/debts', { ...p.debt, accountId: account.id })
+      return account
+    },
     onSuccess: () => { invalidate(); setAcctModal({ open: false, editing: null }) },
   })
   const removeAccount = useMutation({ mutationFn: (id: string) => api.del(`/api/accounts/${id}`), onSuccess: invalidate })
@@ -193,7 +205,7 @@ export function AccountModal({
   saving: boolean
   error?: string | null
   onClose: () => void
-  onSubmit: (p: { id?: string; body: Record<string, unknown> }) => void
+  onSubmit: (p: { id?: string; body: Record<string, unknown>; debt?: Record<string, unknown> }) => void
   defaultKind?: AccountKind
 }) {
   const [name, setName] = useState(account?.name ?? '')
@@ -205,6 +217,16 @@ export function AccountModal({
   const [isEmergencyFund, setIsEmergencyFund] = useState(account?.isEmergencyFund ?? false)
   const [busy, setBusy] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
+
+  // Inline debt terms — only when creating a liability account ("enter once").
+  const [trackDebt, setTrackDebt] = useState(true)
+  const [apr, setApr] = useState('')
+  const [originalLoan, setOriginalLoan] = useState('')
+  const [termMonths, setTermMonths] = useState('')
+  const [debtPayment, setDebtPayment] = useState('')
+  const [debtTerm, setDebtTerm] = useState<DebtTerm>('LONG_TERM')
+  const [bucket, setBucket] = useState<BudgetBucket>('ESSENTIAL')
+  const isNewLiability = !account && isLiabilityKind(kind)
 
   async function submit(e: FormEvent) {
     e.preventDefault()
@@ -219,6 +241,19 @@ export function AccountModal({
       return
     }
     setBusy(false)
+    const debt = isNewLiability && trackDebt
+      ? {
+          name,
+          kind: ACCOUNT_TO_DEBT_KIND[kind] ?? 'OTHER',
+          term: debtTerm,
+          bucket,
+          principal: '0', // current balance comes from the linked account
+          originalPrincipal: originalLoan || undefined,
+          apr: apr || '0',
+          termMonths: termMonths ? Number(termMonths) : undefined,
+          monthlyPayment: debtPayment || '0',
+        }
+      : undefined
     onSubmit({
       id: account?.id,
       body: {
@@ -226,6 +261,7 @@ export function AccountModal({
         apy: hasApy(kind) ? (apy || null) : null,
         isEmergencyFund, institutionId,
       },
+      debt,
     })
   }
 
@@ -275,6 +311,36 @@ export function AccountModal({
         )}
         {trackingMode === 'HOLDINGS' && (
           <p className="dim" style={{ fontSize: 13, marginBottom: 12 }}>Value comes from the holdings you add to this account.</p>
+        )}
+        {isNewLiability && (
+          <>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '4px 0 12px', cursor: 'pointer' }}>
+              <input type="checkbox" checked={trackDebt} onChange={(e) => setTrackDebt(e.target.checked)} />
+              <span>Track payoff terms (APR &amp; schedule) as a debt</span>
+            </label>
+            {trackDebt && (
+              <>
+                <Field label="Bucket"><BucketSelect value={bucket} onChange={setBucket} /></Field>
+                <div className="field-row">
+                  <Field label="APR %"><input className="input num" type="number" step="0.01" min="0" value={apr} onChange={(e) => setApr(e.target.value)} /></Field>
+                  <Field label="Original loan amount"><MoneyInput value={originalLoan} onChange={setOriginalLoan} /></Field>
+                </div>
+                <div className="field-row">
+                  <Field label="Term (months)"><input className="input num" type="number" min="1" value={termMonths} onChange={(e) => setTermMonths(e.target.value)} placeholder="e.g. 60" /></Field>
+                  <Field label="Monthly payment"><MoneyInput value={debtPayment} onChange={setDebtPayment} placeholder="blank = amortized min" /></Field>
+                </div>
+                <Field label="Term type">
+                  <select className="input" value={debtTerm} onChange={(e) => setDebtTerm(e.target.value as DebtTerm)}>
+                    <option value="LONG_TERM">Long-term</option>
+                    <option value="SHORT_TERM">Short-term</option>
+                  </select>
+                </Field>
+              </>
+            )}
+          </>
+        )}
+        {isLiabilityKind(kind) && account && (
+          <p className="dim" style={{ fontSize: 13, margin: '4px 0 12px' }}>Manage this debt&apos;s APR &amp; payoff terms on the Debt page.</p>
         )}
         {!isLiabilityKind(kind) && (
           <label style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '4px 0 14px', cursor: 'pointer' }}>
