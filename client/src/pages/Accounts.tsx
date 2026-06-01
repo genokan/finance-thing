@@ -1,6 +1,6 @@
 import { useMemo, useState, type FormEvent } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { api } from '../api/client'
+import { api, ApiError } from '../api/client'
 import type { Account, AccountKind, Holding, Institution, TrackingMode } from '../api/types'
 import { Card, Empty, Field, Loading, MoneyInput, Modal, SectionHead } from '../components/ui'
 import { PlaidConnect } from '../components/PlaidConnect'
@@ -16,6 +16,14 @@ export const KIND_LABELS: Record<AccountKind, string> = {
 
 const LIABILITY_KINDS: AccountKind[] = ['CREDIT_CARD', 'LOAN', 'LINE_OF_CREDIT', 'MORTGAGE']
 export const isLiabilityKind = (k: AccountKind) => LIABILITY_KINDS.includes(k)
+
+// Only investment accounts hold positions; bank accounts never show "shares".
+const INVESTMENT_KINDS: AccountKind[] = ['BROKERAGE', 'IRA', 'ROTH_IRA', 'PLAN_401K', 'DEFINED_CONTRIBUTION', 'HSA', 'RSU']
+export const isInvestmentKind = (k: AccountKind) => INVESTMENT_KINDS.includes(k)
+
+// Interest-bearing cash accounts can carry an APY.
+const APY_KINDS: AccountKind[] = ['SAVINGS', 'MONEY_MARKET']
+const hasApy = (k: AccountKind) => APY_KINDS.includes(k)
 
 async function resolveInstitution(name: string, existing: Institution[]): Promise<string | undefined> {
   const trimmed = name.trim()
@@ -117,6 +125,7 @@ export function Accounts() {
                     <div className="name">{a.name} <span className="badge neutral">{KIND_LABELS[a.kind]}</span>{a.isEmergencyFund && <span className="badge good"> emergency fund</span>}</div>
                     <div className="meta">
                       {a.trackingMode === 'HOLDINGS' ? `${a.holdings.length} holding(s)` : 'Balance-tracked'}
+                      {a.apy ? <span className="num"> · {a.apy}% APY</span> : null}
                       {a.lastUpdatedAt ? ` · updated ${dateLabel(a.lastUpdatedAt)}` : ''}
                       {a.unvestedValue > 0 ? <span className="num"> · {money(a.unvestedValue)} unvested</span> : null}
                     </div>
@@ -159,6 +168,7 @@ export function Accounts() {
           account={acctModal.editing}
           institutions={institutions.data ?? []}
           saving={saveAccount.isPending}
+          error={saveAccount.isError ? (saveAccount.error instanceof ApiError ? saveAccount.error.message : 'Could not save account') : null}
           onClose={() => setAcctModal({ open: false, editing: null })}
           onSubmit={saveAccount.mutate}
         />
@@ -176,11 +186,12 @@ export function Accounts() {
 }
 
 export function AccountModal({
-  account, institutions, saving, onClose, onSubmit, defaultKind,
+  account, institutions, saving, error, onClose, onSubmit, defaultKind,
 }: {
   account: Account | null
   institutions: Institution[]
   saving: boolean
+  error?: string | null
   onClose: () => void
   onSubmit: (p: { id?: string; body: Record<string, unknown> }) => void
   defaultKind?: AccountKind
@@ -189,16 +200,33 @@ export function AccountModal({
   const [kind, setKind] = useState<AccountKind>(account?.kind ?? defaultKind ?? 'CHECKING')
   const [trackingMode, setTrackingMode] = useState<TrackingMode>(account?.trackingMode ?? 'BALANCE')
   const [balance, setBalance] = useState(account ? String(account.balance) : '')
+  const [apy, setApy] = useState(account?.apy ?? '')
   const [institution, setInstitution] = useState(account?.institution?.name ?? '')
   const [isEmergencyFund, setIsEmergencyFund] = useState(account?.isEmergencyFund ?? false)
   const [busy, setBusy] = useState(false)
+  const [formError, setFormError] = useState<string | null>(null)
 
   async function submit(e: FormEvent) {
     e.preventDefault()
+    setFormError(null)
     setBusy(true)
     let institutionId: string | undefined
-    try { institutionId = await resolveInstitution(institution, institutions) } finally { setBusy(false) }
-    onSubmit({ id: account?.id, body: { name, kind, trackingMode, balance: balance || '0', isEmergencyFund, institutionId } })
+    try {
+      institutionId = await resolveInstitution(institution, institutions)
+    } catch (err) {
+      setFormError(err instanceof ApiError ? err.message : 'Could not save institution')
+      setBusy(false)
+      return
+    }
+    setBusy(false)
+    onSubmit({
+      id: account?.id,
+      body: {
+        name, kind, trackingMode, balance: balance || '0',
+        apy: hasApy(kind) ? (apy || null) : null,
+        isEmergencyFund, institutionId,
+      },
+    })
   }
 
   return (
@@ -209,7 +237,16 @@ export function AccountModal({
         </Field>
         <div className="field-row">
           <Field label="Type">
-            <select className="input" value={kind} onChange={(e) => setKind(e.target.value as AccountKind)}>
+            <select
+              className="input"
+              value={kind}
+              onChange={(e) => {
+                const k = e.target.value as AccountKind
+                setKind(k)
+                // Bank/liability accounts can't hold positions — force balance tracking.
+                if (!isInvestmentKind(k)) setTrackingMode('BALANCE')
+              }}
+            >
               {Object.entries(KIND_LABELS).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
             </select>
           </Field>
@@ -218,15 +255,22 @@ export function AccountModal({
             <datalist id="insts">{institutions.map((i) => <option key={i.id} value={i.name} />)}</datalist>
           </Field>
         </div>
-        <Field label="Tracking">
-          <select className="input" value={trackingMode} onChange={(e) => setTrackingMode(e.target.value as TrackingMode)}>
-            <option value="BALANCE">Single balance</option>
-            <option value="HOLDINGS">Holdings (sum of positions)</option>
-          </select>
-        </Field>
+        {isInvestmentKind(kind) && (
+          <Field label="Tracking">
+            <select className="input" value={trackingMode} onChange={(e) => setTrackingMode(e.target.value as TrackingMode)}>
+              <option value="BALANCE">Single balance</option>
+              <option value="HOLDINGS">Holdings (sum of positions)</option>
+            </select>
+          </Field>
+        )}
         {trackingMode === 'BALANCE' && (
           <Field label={isLiabilityKind(kind) ? 'Amount owed' : 'Current balance'}>
             <MoneyInput value={balance} onChange={setBalance} />
+          </Field>
+        )}
+        {hasApy(kind) && (
+          <Field label="APY %">
+            <input className="input num" type="number" step="0.01" min="0" value={apy} onChange={(e) => setApy(e.target.value)} placeholder="e.g. 4.50" />
           </Field>
         )}
         {trackingMode === 'HOLDINGS' && (
@@ -238,6 +282,7 @@ export function AccountModal({
             <span>This is my emergency fund</span>
           </label>
         )}
+        {(formError || error) && <div className="error-text">{formError ?? error}</div>}
         <div className="modal-actions">
           <button type="button" className="btn ghost" onClick={onClose}>Cancel</button>
           <button type="submit" className="btn" disabled={saving || busy}>{saving || busy ? 'Saving…' : 'Save'}</button>

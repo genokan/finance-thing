@@ -7,9 +7,12 @@ import { refreshAllPrices } from '../services/finnhub'
 
 export const accountsRouter = Router()
 
+// Must match the AccountKind enum in schema.prisma — Accounts is the spine for
+// assets AND liabilities, so the liability kinds belong here too.
 const ACCOUNT_KINDS = [
   'CHECKING', 'SAVINGS', 'MONEY_MARKET', 'BROKERAGE', 'IRA', 'ROTH_IRA',
-  'PLAN_401K', 'DEFINED_CONTRIBUTION', 'HSA', 'RSU', 'OTHER',
+  'PLAN_401K', 'DEFINED_CONTRIBUTION', 'HSA', 'RSU',
+  'CREDIT_CARD', 'LOAN', 'LINE_OF_CREDIT', 'MORTGAGE', 'OTHER',
 ] as const
 
 const accountSchema = z.object({
@@ -17,6 +20,7 @@ const accountSchema = z.object({
   kind: z.enum(ACCOUNT_KINDS),
   trackingMode: z.enum(['BALANCE', 'HOLDINGS']).default('BALANCE'),
   balance: z.coerce.number().default(0),
+  apy: z.coerce.number().nonnegative().nullish(),
   isEmergencyFund: z.coerce.boolean().default(false),
   institutionId: z.string().cuid().optional(),
 })

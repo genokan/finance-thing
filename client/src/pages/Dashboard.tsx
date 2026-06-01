@@ -34,8 +34,6 @@ export function Dashboard() {
 
   const d = dash.data
   const i = insights.data
-  const surplus = d.netMonthlyIncome - d.totalExpenses
-  const savingsRate = d.netMonthlyIncome > 0 ? (surplus / d.netMonthlyIncome) * 100 : 0
   const now = new Date()
 
   return (
@@ -48,30 +46,24 @@ export function Dashboard() {
             Total incl. unvested RSUs: <span className="accent">{money(d.totalNetWorth)}</span>
           </div>
         </div>
-        <button className="btn ghost" onClick={() => record.mutate()} disabled={record.isPending}>
-          {record.isPending ? 'Recording…' : `Snapshot ${monthLabel(now.getFullYear(), now.getMonth() + 1)}`}
-        </button>
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 8 }}>
+          <button className="btn ghost" onClick={() => record.mutate()} disabled={record.isPending}>
+            {record.isPending ? 'Recording…' : `Snapshot ${monthLabel(now.getFullYear(), now.getMonth() + 1)}`}
+          </button>
+          <Link to="/history" className="dim" style={{ fontSize: 13 }}>View history →</Link>
+        </div>
       </div>
 
       {record.isSuccess && <div className="dim" style={{ marginBottom: 8 }}>Snapshot saved to History.</div>}
       {record.isError && <div className="error-text">Could not record snapshot.</div>}
 
-      {/* Monthly cash flow — the CSV's "Net Income / Expenses / Savings" summary */}
-      <SectionHead title="Monthly cash flow" />
-      <div className="grid cols-4">
-        <Stat label="Net income" value={money(d.netMonthlyIncome)} sub="after taxes / month" to="/income" />
-        <Stat label="Outflow" value={money(d.totalExpenses)} sub="recurring expenses" to="/expenses" />
-        <Stat
-          label="Surplus"
-          value={money(surplus)}
-          tone={surplus >= 0 ? 'pos' : 'neg'}
-          sub={`${percent(savingsRate)} of income`}
-          to="/budgets"
-        />
-        <Stat label="Total debt" value={money(d.totalDebt)} tone={d.totalDebt > 0 ? 'neg' : undefined} sub="balances owed" to="/debt" />
-      </div>
+      {/* The allocation waterfall — every dollar of net income, where it goes. */}
+      <SectionHead title="Where your money goes" action={<span className="dim" style={{ fontSize: 13 }}>monthly</span>} />
+      <Card>
+        <Waterfall d={d} />
+      </Card>
 
-      {/* Net-worth composition — the CSV's "Cash Total / Investment Total" buckets */}
+      {/* Net-worth composition — the CSV's Cash Total / Investment Total buckets */}
       <SectionHead title="Net worth breakdown" />
       <div className="grid cols-4">
         <Stat label="Liquid cash" value={money(d.liquidCash)} sub="checking / savings" to="/accounts" />
@@ -80,13 +72,12 @@ export function Dashboard() {
         <Stat label="Debt" value={money(-d.totalDebt)} tone={d.totalDebt > 0 ? 'neg' : undefined} sub="reduces net worth" to="/debt" />
       </div>
 
-      {/* 50/30/20 — needs / wants / savings, with dollar amounts */}
       <SectionHead title="50 / 30 / 20 budget" action={<Link to="/budgets" className="dim" style={{ fontSize: 13 }}>Manage →</Link>} />
       <Card>
         <BudgetSplit
           needs={d.essentialExpenses}
           wants={d.discretionaryExpenses}
-          savings={Math.max(0, surplus)}
+          savings={d.contributions + Math.max(0, d.unallocated)}
           ftt={d.fiftyThirtyTwenty}
         />
       </Card>
@@ -201,6 +192,60 @@ export function Dashboard() {
           </Card>
         </>
       )}
+    </div>
+  )
+}
+
+// Income split into Outflow / Debt / Contributions / Unallocated. Unallocated is
+// the headline "free to spend" — a real bucket, not an error.
+function Waterfall({ d }: { d: DashboardData }) {
+  const income = d.netMonthlyIncome
+  const outflow = Math.max(0, d.totalExpenses - d.debtPayments)
+  const bands = [
+    { key: 'outflow', label: 'Outflow', to: '/expenses', amount: outflow, color: 'var(--accent)' },
+    { key: 'debt', label: 'Debt payments', to: '/debt', amount: d.debtPayments, color: 'var(--negative)' },
+    { key: 'contrib', label: 'Contributions', to: '/contributions', amount: d.contributions, color: 'var(--positive)' },
+    { key: 'free', label: 'Unallocated', to: undefined, amount: Math.max(0, d.unallocated), color: 'var(--indigo)' },
+  ]
+  const denom = income > 0 ? income : bands.reduce((s, b) => s + b.amount, 0) || 1
+  const w = (n: number) => `${Math.max(0, (n / denom) * 100)}%`
+  const pctOfIncome = (n: number) => (income > 0 ? `${Math.round((n / income) * 100)}%` : '—')
+
+  return (
+    <div>
+      <div className="hero" style={{ padding: '0 0 14px' }}>
+        <div className="label">Unallocated — free to spend</div>
+        <div className={`value num ${d.unallocated >= 0 ? '' : 'neg'}`} style={{ fontSize: 40 }}>{money(d.unallocated)}</div>
+        <div className="sub num">
+          of {money(income)} net income / mo
+          {d.unallocated < 0 ? <span className="neg"> · over-allocated, trim something</span> : null}
+        </div>
+      </div>
+
+      <div className="meter">
+        {bands.map((b) => (b.amount > 0 ? <span key={b.key} style={{ width: w(b.amount), background: b.color }} /> : null))}
+      </div>
+
+      <div className="list">
+        {bands.map((b) => {
+          const row = (
+            <>
+              <div className="main">
+                <div className="name">
+                  <span className="dot" style={{ background: b.color }} /> {b.label}
+                </div>
+                <div className="meta num">{pctOfIncome(b.amount)} of net income</div>
+              </div>
+              <div className="amt num">{money(b.amount)}</div>
+            </>
+          )
+          return b.to ? (
+            <Link to={b.to} className="row clickable" key={b.key}>{row}</Link>
+          ) : (
+            <div className="row" key={b.key}>{row}</div>
+          )
+        })}
+      </div>
     </div>
   )
 }

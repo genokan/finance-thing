@@ -14,6 +14,7 @@ const debtSchema = z.object({
   categoryId: z.string().cuid().nullish(),
   accountId: z.string().cuid().optional(),
   principal: z.coerce.number().nonnegative(),
+  originalPrincipal: z.coerce.number().nonnegative().nullish(),
   monthlyPayment: z.coerce.number().nonnegative().default(0),
   termMonths: z.coerce.number().int().positive().optional(),
   apr: z.coerce.number().nonnegative(),

@@ -35,4 +35,11 @@ describe('debtPaymentInfo', () => {
     const noActual = debtPaymentInfo(baseDebt({ principal: '1200', termMonths: 12, monthlyPayment: '0' }))
     expect(noActual.effectivePayment).toBeCloseTo(100, 2)
   })
+
+  it('amortizes from originalPrincipal (not the current balance) when set', () => {
+    // Owe $5,000 now on a $24,282 / 60mo / 2.74% loan — payment is fixed from origination.
+    const info = debtPaymentInfo(baseDebt({ principal: '5000', originalPrincipal: '24282', apr: '2.74', termMonths: 60 }))
+    expect(info.principalValue).toBe(5000) // current balance for net worth
+    expect(info.minimumPayment).toBeCloseTo(433.4, 0) // based on the original $24,282
+  })
 })

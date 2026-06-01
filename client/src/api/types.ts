@@ -47,6 +47,7 @@ export interface Account {
   kind: AccountKind
   trackingMode: TrackingMode
   balance: string
+  apy: string | null
   isEmergencyFund: boolean
   institutionId: string | null
   institution: Institution | null
@@ -118,6 +119,21 @@ export interface IncomeSource {
   tax: TaxBreakdown
 }
 
+export type ContributionKind = 'RETIREMENT' | 'SAVINGS' | 'BROKERAGE' | 'EXTRA_DEBT' | 'OTHER'
+
+export interface Contribution {
+  id: string
+  name: string
+  amount: string
+  intervalCount: number
+  intervalUnit: IntervalUnit
+  kind: ContributionKind
+  destinationAccountId: string | null
+  destinationAccount: Account | null
+  notes: string | null
+  monthlyEquivalent: number
+}
+
 export interface Debt {
   id: string
   name: string
@@ -129,6 +145,7 @@ export interface Debt {
   accountId: string | null
   account: Account | null
   principal: string
+  originalPrincipal: string | null
   monthlyPayment: string
   termMonths: number | null
   // computed by the server
@@ -158,6 +175,8 @@ export interface Dashboard {
   essentialExpenses: number
   discretionaryExpenses: number
   debtPayments: number
+  contributions: number
+  unallocated: number
   totalDebt: number
   fiftyThirtyTwenty: { needsPercent: number; wantsPercent: number; savingsPercent: number }
   recentSnapshots: { year: number; month: number; netWorth: string; liquidNetWorth: string | null }[]

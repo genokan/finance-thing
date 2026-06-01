@@ -1,9 +1,10 @@
 import { useMemo, useState, type FormEvent } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { Link } from 'react-router-dom'
 import { api } from '../api/client'
-import type { BudgetBucket, Category, Expense, ExpenseKind, IntervalUnit } from '../api/types'
+import type { BudgetBucket, Category, Debt, Expense, ExpenseKind, IntervalUnit } from '../api/types'
 import { BucketBadge, BucketSelect, Card, Empty, Field, Loading, MoneyInput, Modal, SectionHead } from '../components/ui'
-import { dateLabel, intervalLabel, money } from '../lib/format'
+import { dateLabel, intervalLabel, money, percent } from '../lib/format'
 
 interface FormState {
   name: string
@@ -28,6 +29,7 @@ export function Expenses() {
   const qc = useQueryClient()
   const expenses = useQuery({ queryKey: ['expenses'], queryFn: () => api.get<Expense[]>('/api/expenses') })
   const categories = useQuery({ queryKey: ['categories'], queryFn: () => api.get<Category[]>('/api/categories') })
+  const debts = useQuery({ queryKey: ['debts'], queryFn: () => api.get<Debt[]>('/api/debts') })
 
   const [open, setOpen] = useState(false)
   const [editing, setEditing] = useState<Expense | null>(null)
@@ -47,14 +49,16 @@ export function Expenses() {
 
   const recurring = (expenses.data ?? []).filter((e) => e.kind === 'RECURRING')
   const oneTime = (expenses.data ?? []).filter((e) => e.kind === 'ONE_TIME')
+  const debtList = debts.data ?? []
   const total = useMemo(() => recurring.reduce((s, e) => s + e.monthlyEquivalent, 0), [recurring])
+  const debtTotal = useMemo(() => debtList.reduce((s, d) => s + d.effectivePayment, 0), [debtList])
 
-  if (expenses.isLoading || categories.isLoading) return <Loading />
+  if (expenses.isLoading || categories.isLoading || debts.isLoading) return <Loading />
 
   return (
     <div>
-      <h1 className="page-title">Expenses</h1>
-      <p className="page-sub num">{money(total, true)}/mo recurring · {recurring.length + oneTime.length} items</p>
+      <h1 className="page-title">Outflow</h1>
+      <p className="page-sub num">{money(total + debtTotal, true)}/mo committed · bills, debt &amp; planned</p>
 
       <SectionHead
         title="Recurring"
@@ -83,6 +87,31 @@ export function Expenses() {
           </div>
         )}
       </Card>
+
+      {debtList.length > 0 && (
+        <>
+          <SectionHead
+            title="Debt payments"
+            action={<Link to="/debt" className="dim" style={{ fontSize: 13 }}>Manage on Debt →</Link>}
+          />
+          <Card>
+            <div className="list">
+              {debtList.map((d) => (
+                <div className="row" key={d.id}>
+                  <div className="main">
+                    <div className="name">{d.name} <span className="badge neutral">debt</span></div>
+                    <div className="meta num">
+                      {percent(Number(d.apr), 2)} APR
+                      {d.actualPayment === 0 && d.minimumPayment > 0 ? ' · amortized minimum' : ''}
+                    </div>
+                  </div>
+                  <div className="amt num">{money(d.effectivePayment, true)}/mo</div>
+                </div>
+              ))}
+            </div>
+          </Card>
+        </>
+      )}
 
       <SectionHead title="One-time / upcoming" />
       <Card>

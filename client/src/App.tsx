@@ -8,6 +8,7 @@ import { Income } from './pages/Income'
 import { Accounts } from './pages/Accounts'
 import { Investments } from './pages/Investments'
 import { Budgets } from './pages/Budgets'
+import { Contributions } from './pages/Contributions'
 import { DebtPage } from './pages/Debt'
 import { History } from './pages/History'
 import { SettingsPage } from './pages/Settings'
@@ -35,6 +36,7 @@ export function App() {
         <Route path="/investments" element={<Investments />} />
         <Route path="/expenses" element={<Expenses />} />
         <Route path="/budgets" element={<Budgets />} />
+        <Route path="/contributions" element={<Contributions />} />
         <Route path="/income" element={<Income />} />
         <Route path="/debt" element={<DebtPage />} />
         <Route path="/history" element={<History />} />

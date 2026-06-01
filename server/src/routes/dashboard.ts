@@ -12,13 +12,14 @@ const r2 = (n: number) => Math.round(n * 100) / 100
 
 dashboardRouter.get('/', async (req, res) => {
   const uid = req.userId
-  const [user, accounts, expenses, incomeSources, debts, snapshots] = await Promise.all([
+  const [user, accounts, expenses, incomeSources, debts, snapshots, contributions] = await Promise.all([
     prisma.user.findUnique({ where: { id: uid }, select: { filingStatus: true, stateRate: true } }),
     prisma.account.findMany({ where: { userId: uid, isActive: true }, include: { holdings: { where: { isActive: true } } } }),
     prisma.expenseItem.findMany({ where: { userId: uid, isActive: true } }),
     prisma.incomeSource.findMany({ where: { userId: uid, isActive: true }, include: { deductions: true } }),
     prisma.debt.findMany({ where: { userId: uid, isActive: true }, include: { account: true } }),
     prisma.monthlySnapshot.findMany({ where: { userId: uid }, orderBy: [{ year: 'desc' }, { month: 'desc' }], take: 2, select: { year: true, month: true, netWorth: true, liquidNetWorth: true } }),
+    prisma.contribution.findMany({ where: { userId: uid, isActive: true } }),
   ])
 
   const defaults = { filingStatus: user?.filingStatus ?? null, stateRate: user?.stateRate != null ? Number(user.stateRate) : null }
@@ -46,6 +47,9 @@ dashboardRouter.get('/', async (req, res) => {
   const uncategorized = recurring.filter((e) => !e.bucket).reduce((s, e) => s + monthlyOf(e.amount, e.intervalCount, e.intervalUnit), 0)
   const debtPayments = debts.reduce((s, d) => s + debtPaymentInfo(d).effectivePayment, 0)
   const totalExpenses = essential + discretionary + uncategorized + debtPayments
+  // Contributions are wealth-building (net-worth-neutral), tracked as their own band.
+  const contributionsMonthly = contributions.reduce((s, c) => s + monthlyOf(c.amount, c.intervalCount, c.intervalUnit), 0)
+  const unallocated = netMonthly - totalExpenses - contributionsMonthly
 
   const now = new Date()
   const ninetyOut = new Date(now.getTime() + 90 * 86400000)
@@ -66,6 +70,8 @@ dashboardRouter.get('/', async (req, res) => {
     essentialExpenses: r2(essential),
     discretionaryExpenses: r2(discretionary),
     debtPayments: r2(debtPayments),
+    contributions: r2(contributionsMonthly),
+    unallocated: r2(unallocated),
     totalDebt: r2(totalDebtPrincipal),
     fiftyThirtyTwenty: {
       needsPercent: denom > 0 ? r2(((essential + debtPayments) / denom) * 100) : 0,

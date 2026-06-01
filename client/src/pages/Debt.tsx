@@ -124,6 +124,7 @@ function DebtModal({
   const [categoryId, setCategoryId] = useState(debt?.categoryId ?? '')
   const [accountId, setAccountId] = useState(debt?.accountId ?? '')
   const [principal, setPrincipal] = useState(debt ? String(debt.principal) : '')
+  const [originalPrincipal, setOriginalPrincipal] = useState(debt?.originalPrincipal ?? '')
   const [termMonths, setTermMonths] = useState(debt?.termMonths ? String(debt.termMonths) : '')
   const [monthlyPayment, setMonthlyPayment] = useState(debt && debt.actualPayment > 0 ? String(debt.actualPayment) : '')
   const [apr, setApr] = useState(debt ? String(debt.apr) : '')
@@ -133,8 +134,10 @@ function DebtModal({
   const [postPromoApr, setPostPromoApr] = useState(debt?.postPromoApr ?? '')
   const [notes, setNotes] = useState(debt?.notes ?? '')
 
-  const principalForCalc = accountId ? (accounts.find((a) => a.id === accountId)?.value ?? 0) : Number(principal || 0)
-  const computedMin = minimumPayment(principalForCalc, Number(apr || 0), Number(termMonths || 0))
+  const balanceForCalc = accountId ? (accounts.find((a) => a.id === accountId)?.value ?? 0) : Number(principal || 0)
+  // Amortize from the original loan amount when given; else fall back to the current balance.
+  const amortBasis = Number(originalPrincipal || 0) || balanceForCalc
+  const computedMin = minimumPayment(amortBasis, Number(apr || 0), Number(termMonths || 0))
 
   function submit(e: FormEvent) {
     e.preventDefault()
@@ -144,6 +147,7 @@ function DebtModal({
       categoryId: categoryId || null,
       accountId: accountId || undefined,
       principal: accountId ? '0' : principal,
+      originalPrincipal: originalPrincipal || undefined,
       termMonths: termMonths ? Number(termMonths) : undefined,
       monthlyPayment: monthlyPayment || '0', apr: apr || '0',
       payoffDate: payoffDate || undefined,
@@ -188,14 +192,15 @@ function DebtModal({
         </Field>
         <div className="field-row">
           {accountId ? (
-            <Field label="Principal"><div className="input num dim" style={{ display: 'flex', alignItems: 'center' }}>From linked account</div></Field>
+            <Field label="Current balance"><div className="input num dim" style={{ display: 'flex', alignItems: 'center' }}>From linked account</div></Field>
           ) : (
-            <Field label="Principal"><MoneyInput value={principal} onChange={setPrincipal} required /></Field>
+            <Field label="Current balance"><MoneyInput value={principal} onChange={setPrincipal} required /></Field>
           )}
-          <Field label="Loan term (months)">
-            <input className="input num" type="number" min="1" value={termMonths} onChange={(e) => setTermMonths(e.target.value)} placeholder="e.g. 60" />
-          </Field>
+          <Field label="Original loan amount"><MoneyInput value={originalPrincipal} onChange={setOriginalPrincipal} /></Field>
         </div>
+        <Field label="Loan term (months)">
+          <input className="input num" type="number" min="1" value={termMonths} onChange={(e) => setTermMonths(e.target.value)} placeholder="e.g. 60" />
+        </Field>
         <Field label="Monthly payment (blank = amortized minimum)">
           <MoneyInput value={monthlyPayment} onChange={setMonthlyPayment} placeholder={computedMin > 0 ? computedMin.toFixed(2) : undefined} />
         </Field>

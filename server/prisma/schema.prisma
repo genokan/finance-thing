@@ -119,6 +119,7 @@ model User {
   income     IncomeSource[]
   debts      Debt[]
   snapshots  MonthlySnapshot[]
+  contributions Contribution[]
 }
 
 model Institution {
@@ -141,6 +142,7 @@ model Account {
   // Used when trackingMode = BALANCE. With HOLDINGS, value = sum(holdings.value).
   balance       Decimal      @default(0) @db.Decimal(14, 2)
   isEmergencyFund Boolean    @default(false)
+  apy           Decimal?     @db.Decimal(6, 4) // APY for savings/HYSA/CD/money-market
   institutionId String?
   institution   Institution? @relation(fields: [institutionId], references: [id])
   plaidItemId   String?
@@ -155,6 +157,7 @@ model Account {
   deductions    IncomeDeduction[]
   snapshots     AccountSnapshot[]
   debts         Debt[]
+  contributions Contribution[]
 
   @@index([userId])
 }
@@ -298,7 +301,8 @@ model Debt {
   // account's balance is the source of truth for principal (avoids double counting).
   accountId      String?
   account        Account?     @relation(fields: [accountId], references: [id], onDelete: SetNull)
-  principal      Decimal      @db.Decimal(14, 2)
+  principal       Decimal     @db.Decimal(14, 2) // current amount owed (balance)
+  originalPrincipal Decimal?  @db.Decimal(14, 2) // original loan amount — drives amortization
   // Actual payment (override). When 0/blank, the amortized minimum from termMonths is used.
   monthlyPayment Decimal      @db.Decimal(12, 2)
   termMonths     Int?         // loan length in months — drives the amortized minimum payment
@@ -316,6 +320,35 @@ model Debt {
   updatedAt      DateTime     @updatedAt
 
   snapshots DebtSnapshot[]
+
+  @@index([userId])
+}
+
+// ---------- Contributions (wealth-building allocations) ----------
+
+enum ContributionKind {
+  RETIREMENT
+  SAVINGS
+  BROKERAGE
+  EXTRA_DEBT
+  OTHER
+}
+
+model Contribution {
+  id                   String           @id @default(cuid())
+  userId               String
+  user                 User             @relation(fields: [userId], references: [id])
+  name                 String
+  amount               Decimal          @db.Decimal(12, 2)
+  intervalCount        Int              @default(1)
+  intervalUnit         IntervalUnit     @default(MONTH)
+  kind                 ContributionKind @default(SAVINGS)
+  destinationAccountId String?
+  destinationAccount   Account?         @relation(fields: [destinationAccountId], references: [id], onDelete: SetNull)
+  notes                String?
+  isActive             Boolean          @default(true)
+  createdAt            DateTime         @default(now())
+  updatedAt            DateTime         @updatedAt
 
   @@index([userId])
 }

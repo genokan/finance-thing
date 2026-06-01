@@ -13,6 +13,7 @@ import { incomeRouter } from './routes/income'
 import { accountsRouter } from './routes/accounts'
 import { budgetsRouter } from './routes/budgets'
 import { debtsRouter } from './routes/debts'
+import { contributionsRouter } from './routes/contributions'
 import { snapshotsRouter } from './routes/snapshots'
 import { insightsRouter } from './routes/insights'
 import { settingsRouter } from './routes/settings'
@@ -20,6 +21,9 @@ import { usersRouter } from './routes/users'
 import { plaidRouter } from './routes/plaid'
 import { globalRateLimiter } from './middleware/rateLimiter'
 import { authenticate } from './middleware/auth'
+import pinoHttp from 'pino-http'
+import { logger } from './lib/logger'
+import { clientLogsRouter } from './routes/clientLogs'
 
 export function createApp() {
   const app = express()
@@ -31,8 +35,15 @@ export function createApp() {
   app.use(cookieParser())
   app.use(globalRateLimiter)
 
+  // HTTP access logging is off by default; enable with HTTP_ACCESS_LOG=true.
+  if (process.env.HTTP_ACCESS_LOG === 'true') {
+    app.use(pinoHttp({ logger }))
+  }
+
   // Public routes
   app.use('/api/auth', authRouter)
+  // Browser log ingestion is public so pre-login client errors still report.
+  app.use('/api/client-logs', clientLogsRouter)
 
   // Protected routes — skip /api/auth which is handled above
   app.use('/api', (req: Request, res: Response, next: NextFunction) => {
@@ -47,6 +58,7 @@ export function createApp() {
   app.use('/api/accounts', accountsRouter)
   app.use('/api/budgets', budgetsRouter)
   app.use('/api/debts', debtsRouter)
+  app.use('/api/contributions', contributionsRouter)
   app.use('/api/snapshots', snapshotsRouter)
   app.use('/api/insights', insightsRouter)
   app.use('/api/settings', settingsRouter)
@@ -69,8 +81,8 @@ export function createApp() {
     })
   }
 
-  app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
-    console.error(err.message)
+  app.use((err: Error, req: Request, res: Response, _next: NextFunction) => {
+    logger.error({ err, path: req.path, method: req.method }, 'Unhandled request error')
     res.status(500).json({ error: 'Internal server error' })
   })
 

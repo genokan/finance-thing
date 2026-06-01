@@ -5,19 +5,16 @@ import { api } from '../api/client'
 import { useAuth } from '../auth/AuthContext'
 
 const NAV = [
-  { to: '/', label: 'Dashboard', icon: '◎', end: true },
+  { to: '/', label: 'Overview', icon: '◎', end: true },
   { to: '/accounts', label: 'Accounts', icon: '▤', end: false },
   { to: '/investments', label: 'Investments', icon: '▲', end: false },
-  { to: '/expenses', label: 'Expenses', icon: '↻', end: false },
-  { to: '/budgets', label: 'Budgets', icon: '◧', end: false },
-  { to: '/income', label: 'Income', icon: '↓', end: false },
   { to: '/debt', label: 'Debt', icon: '▼', end: false },
-  { to: '/history', label: 'History', icon: '∿', end: false },
-  { to: '/settings', label: 'Settings', icon: '⚙', end: false },
+  { to: '/expenses', label: 'Outflow', icon: '↻', end: false },
+  { to: '/income', label: 'Income', icon: '↓', end: false },
 ]
 
 // Bottom nav on mobile shows the most-used subset.
-const MOBILE_NAV = NAV.filter((n) => ['/', '/accounts', '/expenses', '/budgets', '/debt'].includes(n.to))
+const MOBILE_NAV = NAV.filter((n) => ['/', '/accounts', '/debt', '/expenses', '/income'].includes(n.to))
 
 function UserMenu() {
   const { logout } = useAuth()

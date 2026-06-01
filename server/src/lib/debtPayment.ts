@@ -16,11 +16,15 @@ export type DebtWithAccount = Debt & { account?: Account | null }
  * everywhere (actual if set, otherwise the minimum).
  */
 export function debtPaymentInfo(debt: DebtWithAccount) {
-  const principal = debt.account ? Number(debt.account.balance) : Number(debt.principal)
-  const minimum = minimumPayment(principal, Number(debt.apr), debt.termMonths)
+  // Current amount owed: a linked account's balance wins, else the debt's own balance.
+  const balance = debt.account ? Number(debt.account.balance) : Number(debt.principal)
+  // Amortize from the original loan amount when recorded; fall back to the current
+  // balance for informal/older debts without an original principal. balance ≠ principal.
+  const amortBasis = debt.originalPrincipal != null ? Number(debt.originalPrincipal) : balance
+  const minimum = minimumPayment(amortBasis, Number(debt.apr), debt.termMonths)
   const actual = Number(debt.monthlyPayment)
   const effective = actual > 0 ? actual : minimum
   const round2 = (n: number) => Math.round(n * 100) / 100
   // `principalValue` (not `principal`) so spreading this onto a Debt doesn't clobber the raw column.
-  return { principalValue: round2(principal), minimumPayment: round2(minimum), actualPayment: round2(actual), effectivePayment: round2(effective) }
+  return { principalValue: round2(balance), minimumPayment: round2(minimum), actualPayment: round2(actual), effectivePayment: round2(effective) }
 }
