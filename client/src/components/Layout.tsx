@@ -61,7 +61,7 @@ export function Layout() {
     <div className="app">
       <header className="topnav">
         <div className="topnav-inner">
-          <Brand size={26} />
+          <Brand />
           <nav className="topnav-links">
             {NAV.map((n) => (
               <NavLink key={n.to} to={n.to} end={n.end} className={({ isActive }) => `navlink ${isActive ? 'active' : ''}`}>

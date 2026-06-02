@@ -155,26 +155,39 @@ input[type="date"]::-webkit-calendar-picker-indicator {
 .brand-lockup {
   display: inline-flex;
   align-items: center;
-  gap: 11px;
+  gap: 0.32em;
   flex-shrink: 0;
-}
-
-.brand-mark {
-  flex-shrink: 0;
-  filter: drop-shadow(0 3px 10px rgba(245, 177, 61, 0.28));
-}
-
-.brand-word {
   font-family: var(--font-display);
-  font-weight: 600;
-  font-size: 20px;
-  letter-spacing: -0.01em;
+  font-size: 21px;
   line-height: 1;
   white-space: nowrap;
 }
 
-.brand-dot {
-  color: var(--accent);
+/* "finance" — brushed-gold gradient serif */
+.brand-fin {
+  font-weight: 600;
+  letter-spacing: -0.015em;
+  background: linear-gradient(96deg, #ffe2a8 0%, #f5b13d 52%, #c98213 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+/* "thing" — italic, understated, a touch of personality */
+.brand-thing {
+  font-style: italic;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  color: var(--text);
+}
+
+/* glowing gold coin-dot separator */
+.brand-sep {
+  width: 0.17em;
+  height: 0.17em;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 7px 1px rgba(245, 177, 61, 0.55);
 }
 
 .topnav-links {
@@ -910,11 +923,8 @@ textarea.input {
 }
 
 .auth-card .brand-lockup {
-  margin-bottom: 6px;
-}
-
-.auth-card .brand-word {
-  font-size: 27px;
+  font-size: 32px;
+  margin-bottom: 8px;
 }
 
 /* ---------- Misc ---------- */

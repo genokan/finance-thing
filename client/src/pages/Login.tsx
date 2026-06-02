@@ -26,7 +26,7 @@ export function Login() {
   return (
     <div className="auth-wrap">
       <form className="card auth-card" onSubmit={onSubmit}>
-        <Brand size={34} />
+        <Brand />
         <p className="page-sub" style={{ marginTop: 10 }}>Sign in to your dashboard</p>
 
         <div className="field">
