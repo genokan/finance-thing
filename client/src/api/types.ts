@@ -20,7 +20,7 @@ export interface Institution {
 }
 
 export interface ManagedInstitution extends Institution {
-  _count: { accounts: number; debts: number; plaidItems: number }
+  linked: number
 }
 
 export interface Category {

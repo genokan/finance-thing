@@ -179,7 +179,7 @@ function InstitutionsSection() {
         ) : (
           <div className="list">
             {list.map((inst) => {
-              const uses = inst._count.accounts + inst._count.debts + inst._count.plaidItems
+              const uses = inst.linked
               return (
                 <div className="row" key={inst.id}>
                   <div className="main">
