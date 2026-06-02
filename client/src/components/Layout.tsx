@@ -3,6 +3,7 @@ import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { api } from '../api/client'
 import { useAuth } from '../auth/AuthContext'
+import { Brand } from './Brand'
 
 const NAV = [
   { to: '/', label: 'Overview', icon: '◎', end: true },
@@ -60,9 +61,7 @@ export function Layout() {
     <div className="app">
       <header className="topnav">
         <div className="topnav-inner">
-          <div className="brand">
-            finance<span>·</span>thing
-          </div>
+          <Brand size={26} />
           <nav className="topnav-links">
             {NAV.map((n) => (
               <NavLink key={n.to} to={n.to} end={n.end} className={({ isActive }) => `navlink ${isActive ? 'active' : ''}`}>

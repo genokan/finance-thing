@@ -152,15 +152,28 @@ input[type="date"]::-webkit-calendar-picker-indicator {
   height: 64px;
 }
 
-.topnav .brand {
-  font-family: var(--font-display);
-  font-weight: 600;
-  font-size: 21px;
-  letter-spacing: -0.01em;
+.brand-lockup {
+  display: inline-flex;
+  align-items: center;
+  gap: 11px;
   flex-shrink: 0;
 }
 
-.topnav .brand span {
+.brand-mark {
+  flex-shrink: 0;
+  filter: drop-shadow(0 3px 10px rgba(245, 177, 61, 0.28));
+}
+
+.brand-word {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 20px;
+  letter-spacing: -0.01em;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.brand-dot {
   color: var(--accent);
 }
 
@@ -896,16 +909,12 @@ textarea.input {
   max-width: 380px;
 }
 
-.auth-card .brand {
-  font-family: var(--font-display);
-  font-size: 30px;
-  font-weight: 600;
-  margin-bottom: 4px;
-  letter-spacing: -0.01em;
+.auth-card .brand-lockup {
+  margin-bottom: 6px;
 }
 
-.auth-card .brand span {
-  color: var(--accent);
+.auth-card .brand-word {
+  font-size: 27px;
 }
 
 /* ---------- Misc ---------- */

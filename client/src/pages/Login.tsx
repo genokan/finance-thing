@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react'
 import { useAuth } from '../auth/AuthContext'
 import { ApiError } from '../api/client'
+import { Brand } from '../components/Brand'
 
 export function Login() {
   const { login } = useAuth()
@@ -25,10 +26,8 @@ export function Login() {
   return (
     <div className="auth-wrap">
       <form className="card auth-card" onSubmit={onSubmit}>
-        <div className="brand">
-          finance<span>·</span>thing
-        </div>
-        <p className="page-sub">Sign in to your dashboard</p>
+        <Brand size={34} />
+        <p className="page-sub" style={{ marginTop: 10 }}>Sign in to your dashboard</p>
 
         <div className="field">
           <label>Email</label>
