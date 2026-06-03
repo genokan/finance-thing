@@ -48,3 +48,6 @@ server/public/
 
 # Claude Code local files (project memory, personal notes) — never publish
 .claude/
+
+# macOS
+.DS_Store

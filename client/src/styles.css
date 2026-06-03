@@ -646,6 +646,24 @@ a.card:hover .stat-arrow,
   white-space: nowrap;
 }
 
+/* Stacked amount + caption ("Balance", "Payment", …) so a bare number's
+   meaning is always explicit. */
+.amt-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 1px;
+}
+
+.amt-cell .amt-cap {
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  white-space: nowrap;
+}
+
 /* ---------- Buttons ---------- */
 .btn {
   background: linear-gradient(180deg, var(--accent-2), var(--accent));

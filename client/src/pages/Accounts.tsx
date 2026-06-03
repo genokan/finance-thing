@@ -2,7 +2,7 @@ import { useMemo, useState, type FormEvent } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api, ApiError } from '../api/client'
 import type { Account, AccountKind, BudgetBucket, DebtKind, DebtTerm, Holding, Institution, TrackingMode } from '../api/types'
-import { BucketSelect, Card, Empty, Field, Loading, MoneyInput, Modal, SectionHead } from '../components/ui'
+import { AmountCell, BucketSelect, Card, Empty, Field, Loading, MoneyInput, Modal, SectionHead } from '../components/ui'
 import { PlaidConnect } from '../components/PlaidConnect'
 import { dateLabel, money } from '../lib/format'
 
@@ -143,7 +143,11 @@ export function Accounts() {
                     </div>
                   </div>
                   <div className="right">
-                    <div className={`amt num ${isLiabilityKind(a.kind) ? 'neg' : ''}`}>{money(a.value)}{isLiabilityKind(a.kind) ? ' owed' : ''}</div>
+                    <AmountCell
+                      value={money(a.value)}
+                      tone={isLiabilityKind(a.kind) ? 'neg' : undefined}
+                      label={isLiabilityKind(a.kind) ? 'Owed' : isInvestmentKind(a.kind) ? 'Value' : 'Balance'}
+                    />
                     <button className="iconbtn" onClick={() => setAcctModal({ open: true, editing: a })}>✎</button>
                     <button className="iconbtn" onClick={() => removeAccount.mutate(a.id)}>✕</button>
                   </div>

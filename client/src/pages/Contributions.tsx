@@ -2,7 +2,7 @@ import { useState, type FormEvent } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from '../api/client'
 import type { Account, Contribution, ContributionKind, IntervalUnit } from '../api/types'
-import { Card, Empty, Field, Loading, MoneyInput, Modal, SectionHead } from '../components/ui'
+import { AmountCell, Card, Empty, Field, Loading, MoneyInput, Modal, SectionHead } from '../components/ui'
 import { intervalLabel, money } from '../lib/format'
 
 const KIND_LABELS: Record<ContributionKind, string> = {
@@ -53,7 +53,7 @@ export function Contributions() {
                   </div>
                 </div>
                 <div className="right">
-                  <div className="amt num">{money(c.monthlyEquivalent, true)}/mo</div>
+                  <AmountCell value={money(c.monthlyEquivalent, true)} label="Per month" />
                   <button className="iconbtn" onClick={() => { setEditing(c); setOpen(true) }}>✎</button>
                   <button className="iconbtn" onClick={() => remove.mutate(c.id)}>✕</button>
                 </div>

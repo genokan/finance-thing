@@ -2,7 +2,7 @@ import { useState, type FormEvent } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from '../api/client'
 import type { Account, BudgetBucket, Category, Debt, DebtKind, DebtTerm } from '../api/types'
-import { BucketBadge, BucketSelect, Card, Empty, Field, Loading, MoneyInput, Modal, SectionHead } from '../components/ui'
+import { AmountCell, BucketBadge, BucketSelect, Card, Empty, Field, Loading, MoneyInput, Modal, SectionHead } from '../components/ui'
 import { isLiabilityKind } from './Accounts'
 import { dateLabel, daysUntil, money, percent } from '../lib/format'
 
@@ -71,7 +71,7 @@ export function DebtPage() {
           </div>
         </div>
         <div className="right">
-          <div className="amt num">{money(debtPrincipal(d))}</div>
+          <AmountCell value={money(debtPrincipal(d))} label="Balance" />
           <button className="iconbtn" onClick={() => editRow(d)}>✎</button>
           <button className="iconbtn" onClick={() => remove.mutate(d.id)}>✕</button>
         </div>

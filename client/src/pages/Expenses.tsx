@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
 import { api } from '../api/client'
 import type { BudgetBucket, Category, Debt, Expense, ExpenseKind, IntervalUnit } from '../api/types'
-import { BucketBadge, BucketSelect, Card, Empty, Field, Loading, MoneyInput, Modal, SectionHead } from '../components/ui'
+import { AmountCell, BucketBadge, BucketSelect, Card, Empty, Field, Loading, MoneyInput, Modal, SectionHead } from '../components/ui'
 import { dateLabel, intervalLabel, money, percent } from '../lib/format'
 
 interface FormState {
@@ -78,7 +78,7 @@ export function Expenses() {
                   </div>
                 </div>
                 <div className="right">
-                  <div className="amt num">{money(e.monthlyEquivalent, true)}/mo</div>
+                  <AmountCell value={money(e.monthlyEquivalent, true)} label="Per month" />
                   <button className="iconbtn" onClick={() => { setEditing(e); setOpen(true) }}>✎</button>
                   <button className="iconbtn" onClick={() => remove.mutate(e.id)}>✕</button>
                 </div>
@@ -105,7 +105,7 @@ export function Expenses() {
                       {d.actualPayment === 0 && d.minimumPayment > 0 ? ' · amortized minimum' : ''}
                     </div>
                   </div>
-                  <div className="amt num">{money(d.effectivePayment, true)}/mo</div>
+                  <AmountCell value={money(d.effectivePayment, true)} label="Payment / mo" />
                 </div>
               ))}
             </div>
@@ -128,7 +128,7 @@ export function Expenses() {
                   </div>
                 </div>
                 <div className="right">
-                  <div className="amt num">{money(e.amount, true)}</div>
+                  <AmountCell value={money(e.amount, true)} label="One-time" />
                   <button className="iconbtn" onClick={() => { setEditing(e); setOpen(true) }}>✎</button>
                   <button className="iconbtn" onClick={() => remove.mutate(e.id)}>✕</button>
                 </div>

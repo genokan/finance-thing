@@ -87,6 +87,25 @@ export function Stat({
   return <Card className="stat-card">{inner}</Card>
 }
 
+// Right-aligned amount with a small caption beneath it so a bare number is
+// never ambiguous (e.g. a debt's balance vs. its monthly payment).
+export function AmountCell({
+  value,
+  label,
+  tone,
+}: {
+  value: ReactNode
+  label?: string
+  tone?: 'pos' | 'neg'
+}) {
+  return (
+    <div className="amt-cell">
+      <div className={`amt num ${tone ?? ''}`}>{value}</div>
+      {label && <div className="amt-cap">{label}</div>}
+    </div>
+  )
+}
+
 export function SectionHead({ title, action }: { title: string; action?: ReactNode }) {
   return (
     <div className="section-head">

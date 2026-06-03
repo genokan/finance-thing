@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
 import { api } from '../api/client'
 import type { Dashboard as DashboardData, Insights } from '../api/types'
-import { Bar, Card, Loading, SectionHead, Stat } from '../components/ui'
+import { AmountCell, Bar, Card, Loading, SectionHead, Stat } from '../components/ui'
 import { money, percent, monthLabel, dateLabel } from '../lib/format'
 
 function recordCurrentMonth() {
@@ -236,7 +236,7 @@ function Waterfall({ d }: { d: DashboardData }) {
                 </div>
                 <div className="meta num">{pctOfIncome(b.amount)} of net income</div>
               </div>
-              <div className="amt num">{money(b.amount)}</div>
+              <AmountCell value={money(b.amount)} label="Per month" />
             </>
           )
           return b.to ? (

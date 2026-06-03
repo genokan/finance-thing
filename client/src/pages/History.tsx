@@ -13,7 +13,7 @@ import {
 } from 'recharts'
 import { api } from '../api/client'
 import type { SnapshotListItem } from '../api/types'
-import { Card, Empty, Loading, SectionHead } from '../components/ui'
+import { AmountCell, Card, Empty, Loading, SectionHead } from '../components/ui'
 import { money, monthLabel } from '../lib/format'
 
 interface SnapshotDetail {
@@ -135,7 +135,7 @@ export function History() {
           {[...ordered].reverse().map((s) => (
             <div className="row" key={s.id}>
               <div className="name">{monthLabel(s.year, s.month)}</div>
-              <div className="amt num">{money(s.netWorth)}</div>
+              <AmountCell value={money(s.netWorth)} label="Net worth" />
             </div>
           ))}
         </div>

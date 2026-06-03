@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
 import { api } from '../api/client'
 import type { Account, AccountKind, Holding, Institution } from '../api/types'
-import { Card, Empty, Loading, SectionHead } from '../components/ui'
+import { AmountCell, Card, Empty, Loading, SectionHead } from '../components/ui'
 import { AccountModal, HoldingModal, KIND_LABELS } from './Accounts'
 import { dateLabel, money } from '../lib/format'
 
@@ -95,7 +95,7 @@ export function Investments() {
                   {a.unvestedValue > 0 ? <span className="num"> · {money(a.unvestedValue)} unvested</span> : null}
                 </div>
               </div>
-              <div className="amt num">{money(a.value)}</div>
+              <AmountCell value={money(a.value)} label="Value" />
             </div>
 
             {a.trackingMode === 'HOLDINGS' ? (
