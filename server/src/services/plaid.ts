@@ -2,6 +2,7 @@ import { Configuration, PlaidApi, PlaidEnvironments, Products, CountryCode } fro
 import type { AccountKind } from '../generated/prisma/client'
 import { encrypt, decrypt } from '../lib/crypto'
 import { prisma } from '../lib/prisma'
+import { ensureDebtForAccount, isLiabilityKind } from '../lib/debtAutoCreate'
 
 function client() {
   const env = (process.env.PLAID_ENV ?? 'sandbox') as keyof typeof PlaidEnvironments
@@ -63,23 +64,25 @@ export async function syncAllBalances(userId: string): Promise<{ synced: number;
       for (const acct of data.accounts) {
         const balance = acct.balances.current
         if (balance == null) continue
+        const kind = mapKind(acct.type, acct.subtype)
         const existing = await prisma.account.findFirst({ where: { userId, plaidItemId: item.id, name: acct.name } })
-        if (existing) {
-          await prisma.account.update({ where: { id: existing.id }, data: { balance, lastUpdatedAt: new Date() } })
-        } else {
-          await prisma.account.create({
-            data: {
-              userId,
-              name: acct.name,
-              kind: mapKind(acct.type, acct.subtype),
-              trackingMode: 'BALANCE',
-              balance,
-              institutionId: item.institutionId,
-              plaidItemId: item.id,
-              lastUpdatedAt: new Date(),
-            },
-          })
-        }
+        const row = existing
+          ? await prisma.account.update({ where: { id: existing.id }, data: { balance, lastUpdatedAt: new Date() } })
+          : await prisma.account.create({
+              data: {
+                userId,
+                name: acct.name,
+                kind,
+                trackingMode: 'BALANCE',
+                balance,
+                institutionId: item.institutionId,
+                plaidItemId: item.id,
+                lastUpdatedAt: new Date(),
+              },
+            })
+        // Liability accounts get a linked Debt so they surface on the Debt page
+        // (idempotent — won't duplicate on re-sync).
+        if (isLiabilityKind(kind)) await ensureDebtForAccount(row)
         synced++
       }
     } catch {

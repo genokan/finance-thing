@@ -24,6 +24,8 @@ export function PlaidConnect() {
     qc.invalidateQueries({ queryKey: ['accounts'] })
     qc.invalidateQueries({ queryKey: ['dashboard'] })
     qc.invalidateQueries({ queryKey: ['plaid-items'] })
+    // Liability accounts auto-spawn linked debts on sync — refresh the Debt page too.
+    qc.invalidateQueries({ queryKey: ['debts'] })
   }
 
   const sync = useMutation({
