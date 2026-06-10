@@ -1,7 +1,8 @@
 import { useMemo, useState, type FormEvent } from 'react'
+import { Link } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api, ApiError } from '../api/client'
-import type { Account, AccountKind, BudgetBucket, DebtKind, DebtTerm, Holding, Institution, TrackingMode } from '../api/types'
+import type { Account, AccountKind, BudgetBucket, Debt, DebtKind, DebtTerm, Holding, Institution, TrackingMode } from '../api/types'
 import { AmountCell, BucketSelect, Card, Empty, Field, Loading, MoneyInput, Modal, SectionHead } from '../components/ui'
 import { PlaidConnect } from '../components/PlaidConnect'
 import { dateLabel, money } from '../lib/format'
@@ -43,6 +44,7 @@ export function Accounts() {
   const qc = useQueryClient()
   const accounts = useQuery({ queryKey: ['accounts'], queryFn: () => api.get<Account[]>('/api/accounts') })
   const institutions = useQuery({ queryKey: ['institutions'], queryFn: () => api.get<Institution[]>('/api/institutions') })
+  const debts = useQuery({ queryKey: ['debts'], queryFn: () => api.get<Debt[]>('/api/debts') })
 
   const [acctModal, setAcctModal] = useState<{ open: boolean; editing: Account | null }>({ open: false, editing: null })
   const [holdingModal, setHoldingModal] = useState<{ accountId: string; editing: Holding | null } | null>(null)
@@ -55,12 +57,20 @@ export function Accounts() {
   }
 
   const saveAccount = useMutation({
-    // On create, a liability account can spawn its linked Debt in the same step
-    // ("enter once"): create the account, then the debt pointing at it.
-    mutationFn: async (p: { id?: string; body: Record<string, unknown>; debt?: Record<string, unknown> }) => {
-      if (p.id) return api.put(`/api/accounts/${p.id}`, p.body)
-      const account = await api.post<Account>('/api/accounts', p.body)
-      if (p.debt) await api.post('/api/debts', { ...p.debt, accountId: account.id })
+    // A liability account and its payoff terms are entered/edited as one step
+    // ("enter once"): save the account, then reconcile its linked Debt — create,
+    // update, or soft-delete it depending on whether "track payoff terms" is on.
+    mutationFn: async (p: { id?: string; body: Record<string, unknown>; debt?: Record<string, unknown>; debtId?: string; removeDebt?: boolean }) => {
+      const account = p.id
+        ? await api.put<Account>(`/api/accounts/${p.id}`, p.body)
+        : await api.post<Account>('/api/accounts', p.body)
+      const accountId = p.id ?? account.id
+      if (p.removeDebt && p.debtId) {
+        await api.del(`/api/debts/${p.debtId}`)
+      } else if (p.debt) {
+        if (p.debtId) await api.put(`/api/debts/${p.debtId}`, { ...p.debt, accountId })
+        else await api.post('/api/debts', { ...p.debt, accountId })
+      }
       return account
     },
     onSuccess: () => { invalidate(); setAcctModal({ open: false, editing: null }) },
@@ -93,7 +103,12 @@ export function Accounts() {
     return [...map.entries()]
   }, [accounts.data])
 
-  if (accounts.isLoading || institutions.isLoading) return <Loading />
+  if (accounts.isLoading || institutions.isLoading || debts.isLoading) return <Loading />
+
+  // The Debt linked to the account being edited (drives the inline payoff fields).
+  const editingDebt = acctModal.editing
+    ? (debts.data ?? []).find((d) => d.accountId === acctModal.editing!.id) ?? null
+    : null
 
   return (
     <div>
@@ -182,6 +197,7 @@ export function Accounts() {
       {acctModal.open && (
         <AccountModal
           account={acctModal.editing}
+          debt={editingDebt}
           institutions={institutions.data ?? []}
           saving={saveAccount.isPending}
           error={saveAccount.isError ? (saveAccount.error instanceof ApiError ? saveAccount.error.message : 'Could not save account') : null}
@@ -202,14 +218,15 @@ export function Accounts() {
 }
 
 export function AccountModal({
-  account, institutions, saving, error, onClose, onSubmit, defaultKind,
+  account, debt, institutions, saving, error, onClose, onSubmit, defaultKind,
 }: {
   account: Account | null
+  debt?: Debt | null
   institutions: Institution[]
   saving: boolean
   error?: string | null
   onClose: () => void
-  onSubmit: (p: { id?: string; body: Record<string, unknown>; debt?: Record<string, unknown> }) => void
+  onSubmit: (p: { id?: string; body: Record<string, unknown>; debt?: Record<string, unknown>; debtId?: string; removeDebt?: boolean }) => void
   defaultKind?: AccountKind
 }) {
   const [name, setName] = useState(account?.name ?? '')
@@ -222,15 +239,17 @@ export function AccountModal({
   const [busy, setBusy] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
 
-  // Inline debt terms — only when creating a liability account ("enter once").
-  const [trackDebt, setTrackDebt] = useState(true)
-  const [apr, setApr] = useState('')
-  const [originalLoan, setOriginalLoan] = useState('')
-  const [termMonths, setTermMonths] = useState('')
-  const [debtPayment, setDebtPayment] = useState('')
-  const [debtTerm, setDebtTerm] = useState<DebtTerm>('LONG_TERM')
-  const [bucket, setBucket] = useState<BudgetBucket>('ESSENTIAL')
-  const isNewLiability = !account && isLiabilityKind(kind)
+  // Inline debt terms — for liability accounts, on create and edit ("enter once").
+  // When editing, pre-fill from the account's linked Debt; default tracking on for
+  // a new account, or to whether a linked debt already exists.
+  const [trackDebt, setTrackDebt] = useState(account ? !!debt : true)
+  const [apr, setApr] = useState(debt ? String(debt.apr) : '')
+  const [originalLoan, setOriginalLoan] = useState(debt?.originalPrincipal ?? '')
+  const [termMonths, setTermMonths] = useState(debt?.termMonths ? String(debt.termMonths) : '')
+  const [debtPayment, setDebtPayment] = useState(debt && Number(debt.monthlyPayment) > 0 ? String(debt.monthlyPayment) : '')
+  const [debtTerm, setDebtTerm] = useState<DebtTerm>(debt?.term ?? 'LONG_TERM')
+  const [bucket, setBucket] = useState<BudgetBucket>(debt?.bucket ?? 'ESSENTIAL')
+  const showDebtFields = isLiabilityKind(kind)
 
   async function submit(e: FormEvent) {
     e.preventDefault()
@@ -245,17 +264,36 @@ export function AccountModal({
       return
     }
     setBusy(false)
-    const debt = isNewLiability && trackDebt
+
+    // Reconcile the linked debt. Track on → create/update its terms; track off
+    // for an account that had one → remove it.
+    const wantDebt = isLiabilityKind(kind) && trackDebt
+    const debtPayload = wantDebt
       ? {
           name,
-          kind: ACCOUNT_TO_DEBT_KIND[kind] ?? 'OTHER',
           term: debtTerm,
           bucket,
-          principal: '0', // current balance comes from the linked account
+          // current balance comes from the linked account, so principal is moot
+          principal: debt ? debt.principal : '0',
           originalPrincipal: originalLoan || undefined,
           apr: apr || '0',
           termMonths: termMonths ? Number(termMonths) : undefined,
           monthlyPayment: debtPayment || '0',
+          // Derive kind on create; on edit keep what the Debt page may have refined.
+          kind: debt ? debt.kind : (ACCOUNT_TO_DEBT_KIND[kind] ?? 'OTHER'),
+          // The PUT replaces the whole row — carry through the advanced fields the
+          // Debt page owns so editing basic terms here never wipes them.
+          ...(debt
+            ? {
+                categoryId: debt.categoryId ?? undefined,
+                payoffDate: debt.payoffDate ?? undefined,
+                isZeroPromo: debt.isZeroPromo,
+                promoEndsAt: debt.promoEndsAt ?? undefined,
+                postPromoApr: debt.postPromoApr ?? undefined,
+                notes: debt.notes ?? undefined,
+                institutionId: debt.institutionId ?? undefined,
+              }
+            : {}),
         }
       : undefined
     onSubmit({
@@ -265,7 +303,9 @@ export function AccountModal({
         apy: hasApy(kind) ? (apy || null) : null,
         isEmergencyFund, institutionId,
       },
-      debt,
+      debt: debtPayload,
+      debtId: debt?.id,
+      removeDebt: !wantDebt && !!debt,
     })
   }
 
@@ -316,7 +356,7 @@ export function AccountModal({
         {trackingMode === 'HOLDINGS' && (
           <p className="dim" style={{ fontSize: 13, marginBottom: 12 }}>Value comes from the holdings you add to this account.</p>
         )}
-        {isNewLiability && (
+        {showDebtFields && (
           <>
             <label style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '4px 0 12px', cursor: 'pointer' }}>
               <input type="checkbox" checked={trackDebt} onChange={(e) => setTrackDebt(e.target.checked)} />
@@ -339,12 +379,15 @@ export function AccountModal({
                     <option value="SHORT_TERM">Short-term</option>
                   </select>
                 </Field>
+                {debt && (
+                  <p className="dim" style={{ fontSize: 13, margin: '-4px 0 12px' }}>
+                    0% promo, sub-category &amp; payoff date live on the{' '}
+                    <Link to="/debt" onClick={onClose}>Debt page</Link>.
+                  </p>
+                )}
               </>
             )}
           </>
-        )}
-        {isLiabilityKind(kind) && account && (
-          <p className="dim" style={{ fontSize: 13, margin: '4px 0 12px' }}>Manage this debt&apos;s APR &amp; payoff terms on the Debt page.</p>
         )}
         {!isLiabilityKind(kind) && (
           <label style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '4px 0 14px', cursor: 'pointer' }}>
