@@ -5,13 +5,14 @@ import { validate } from '../middleware/validate'
 import { accountValue, isCashKind, isLiabilityKind } from '../lib/accountValue'
 import { debtPaymentInfo } from '../lib/debtPayment'
 import { toMonthlyEquivalent } from '../lib/monthlyEquivalent'
-import { estimateTax } from '../services/tax'
+import { estimateTax, linkedDeductionDeposits } from '../services/tax'
 import {
   project,
   modifiersSchema,
   type Modifier,
   type ProjectionInputs,
   type SimAccount,
+  type SimContribution,
   type Assumptions,
 } from '../services/projection'
 
@@ -90,11 +91,19 @@ async function buildInputs(userId: string): Promise<{ inputs: ProjectionInputs; 
     .filter((e) => e.kind === 'ONE_TIME' && e.dueDate && e.dueDate > now)
     .map((e) => ({ type: 'ONE_TIME', month: Math.max(1, monthOffset(now, e.dueDate!)), amount: -Number(e.amount), label: e.name }))
 
-  const simContributions = contributions.map((c) => ({
+  const simContributions: SimContribution[] = contributions.map((c) => ({
     monthlyAmount: toMonthlyEquivalent(Number(c.amount), c.intervalCount, c.intervalUnit),
     accountId: c.destinationAccountId,
     extraDebt: c.kind === 'EXTRA_DEBT',
   }))
+
+  // Payroll deductions with a linked account (401k, HSA…) deposit there each
+  // month — withheld pre-net, so they add to the account without touching flow.
+  for (const src of incomeSources) {
+    for (const dep of linkedDeductionDeposits(src)) {
+      simContributions.push({ monthlyAmount: dep.monthlyAmount, accountId: dep.accountId, payroll: true })
+    }
+  }
 
   return {
     inputs: {

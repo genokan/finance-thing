@@ -67,6 +67,45 @@ snapshotsRouter.post('/', validate(snapshotSchema), async (req, res) => {
   res.status(201).json(await buildSnapshot(req.userId, year, month))
 })
 
+// Chart-ready series in one query — History previously fetched every
+// snapshot's detail individually (one request per recorded month).
+snapshotsRouter.get('/series', async (req, res) => {
+  const snapshots = await prisma.monthlySnapshot.findMany({
+    where: { userId: req.userId },
+    orderBy: [{ year: 'asc' }, { month: 'asc' }],
+    include: {
+      accounts: { include: { account: { select: { kind: true } } } },
+      debts: { include: { debt: { select: { accountId: true } } } },
+    },
+  })
+  const r2 = (n: number) => Math.round(n * 100) / 100
+  res.json(
+    snapshots.map((s) => {
+      // Deleted accounts lose their kind (SetNull) — count them as assets,
+      // matching how they were captured (liabilities live in debt snapshots).
+      const assets = s.accounts
+        .filter((a) => !a.account || !isLiabilityKind(a.account.kind))
+        .reduce((sum, a) => sum + Number(a.value), 0)
+      const liabilityAccounts = s.accounts
+        .filter((a) => a.account && isLiabilityKind(a.account.kind))
+        .reduce((sum, a) => sum + Number(a.value), 0)
+      // Debts linked to a liability account are already counted via the account.
+      const unlinkedDebt = s.debts
+        .filter((d) => !d.debt?.accountId)
+        .reduce((sum, d) => sum + Number(d.principal), 0)
+      const debt = liabilityAccounts + unlinkedDebt
+      return {
+        year: s.year,
+        month: s.month,
+        netWorth: Number(s.netWorth),
+        liquidNetWorth: s.liquidNetWorth != null ? Number(s.liquidNetWorth) : null,
+        assets: r2(assets),
+        debt: r2(debt),
+      }
+    }),
+  )
+})
+
 snapshotsRouter.get('/:year/:month', async (req, res) => {
   const snapshot = await prisma.monthlySnapshot.findUnique({
     where: { userId_year_month: { userId: req.userId, year: parseInt(req.params.year, 10), month: parseInt(req.params.month, 10) } },

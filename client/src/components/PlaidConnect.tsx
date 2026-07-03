@@ -3,13 +3,20 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { usePlaidLink } from 'react-plaid-link'
 import { api } from '../api/client'
 import { Card } from './ui'
+import { dateLabel } from '../lib/format'
 
 interface LinkedItem {
   itemId: string
   institution: string
   accountCount: number
   createdAt: string
+  needsReauth: boolean
+  lastSyncedAt: string | null
 }
+
+// Survives the OAuth redirect round-trip: which item (if any) this Link
+// session is re-authenticating, so onSuccess knows exchange vs relink.
+const RELINK_KEY = 'plaid_relink_item'
 
 // Connect a bank via Plaid Link, sync balances into Accounts, and manage/remove
 // linked items. Lives on the Accounts page next to where the accounts appear.
@@ -45,6 +52,14 @@ export function PlaidConnect() {
     },
   })
 
+  const relinked = useMutation({
+    mutationFn: (itemId: string) => api.post(`/api/plaid/items/${itemId}/relinked`),
+    onSuccess: () => {
+      setStatus('Re-connected. Syncing balances…')
+      sync.mutate()
+    },
+  })
+
   const disconnect = useMutation({
     mutationFn: (itemId: string) => api.del(`/api/plaid/items/${itemId}`),
     onSuccess: () => {
@@ -61,7 +76,12 @@ export function PlaidConnect() {
     receivedRedirectUri: isOAuthReturn ? window.location.href : undefined,
     onSuccess: (publicToken, metadata) => {
       localStorage.removeItem('plaid_link_token')
-      exchange.mutate({ publicToken, institutionName: metadata.institution?.name ?? 'Bank' })
+      const relinkItemId = localStorage.getItem(RELINK_KEY)
+      localStorage.removeItem(RELINK_KEY)
+      // Update mode re-uses the existing access token — no exchange, just
+      // clear the re-auth flag and pull fresh balances.
+      if (relinkItemId) relinked.mutate(relinkItemId)
+      else exchange.mutate({ publicToken, institutionName: metadata.institution?.name ?? 'Bank' })
     },
   })
 
@@ -76,11 +96,14 @@ export function PlaidConnect() {
     if (linkToken && ready) open()
   }, [linkToken, ready, open])
 
-  async function startLink() {
+  async function startLink(relinkItemId?: string) {
     setStatus(null)
     try {
-      const { linkToken: token } = await api.get<{ linkToken: string }>('/api/plaid/link-token')
+      const path = relinkItemId ? `/api/plaid/link-token?relinkItemId=${encodeURIComponent(relinkItemId)}` : '/api/plaid/link-token'
+      const { linkToken: token } = await api.get<{ linkToken: string }>(path)
       localStorage.setItem('plaid_link_token', token)
+      if (relinkItemId) localStorage.setItem(RELINK_KEY, relinkItemId)
+      else localStorage.removeItem(RELINK_KEY)
       setLinkToken(token)
     } catch {
       setStatus('Could not start Plaid Link. Check the Plaid credentials on the server.')
@@ -97,13 +120,13 @@ export function PlaidConnect() {
 
   return (
     <Card>
-      <div className="row" style={{ paddingTop: 0, paddingBottom: linked.length ? 12 : 0 }}>
+      <div className="row lead" style={{ paddingBottom: linked.length ? 12 : 0 }}>
         <div className="main">
           <div className="name">Connect a bank</div>
-          <div className="meta">Link a bank or brokerage via Plaid to auto-import account balances.</div>
+          <div className="meta">Link a bank or brokerage via Plaid to auto-import account balances. Balances also refresh automatically each night.</div>
         </div>
         <div className="right">
-          <button className="btn sm" onClick={startLink} disabled={exchange.isPending}>+ Connect</button>
+          <button className="btn sm" onClick={() => startLink()} disabled={exchange.isPending}>+ Connect</button>
           <button className="btn ghost sm" onClick={() => sync.mutate()} disabled={sync.isPending || !linked.length}>
             {sync.isPending ? 'Syncing…' : 'Sync'}
           </button>
@@ -113,10 +136,21 @@ export function PlaidConnect() {
       {linked.map((item) => (
         <div className="row" key={item.itemId}>
           <div className="main">
-            <div className="name">{item.institution}</div>
-            <div className="meta">{item.accountCount} synced account(s)</div>
+            <div className="name">
+              {item.institution}
+              {item.needsReauth && <span className="badge bad"> re-connect needed</span>}
+            </div>
+            <div className="meta">
+              {item.accountCount} synced account(s)
+              {item.lastSyncedAt ? ` · synced ${dateLabel(item.lastSyncedAt)}` : ''}
+            </div>
           </div>
           <div className="right">
+            {item.needsReauth && (
+              <button className="btn sm" onClick={() => startLink(item.itemId)} disabled={relinked.isPending}>
+                Re-connect
+              </button>
+            )}
             <button className="btn danger sm" onClick={() => onDisconnect(item)} disabled={disconnect.isPending}>
               Disconnect
             </button>
@@ -124,7 +158,7 @@ export function PlaidConnect() {
         </div>
       ))}
 
-      {status && <div className="dim" style={{ marginTop: 10 }}>{status}</div>}
+      {status && <div className="note" style={{ marginTop: 10, marginBottom: 0 }}>{status}</div>}
     </Card>
   )
 }

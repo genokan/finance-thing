@@ -12,11 +12,12 @@ const r2 = (n: number) => Math.round(n * 100) / 100
 // target, plus the 50/30/20 roll-up by bucket against monthly income.
 budgetsRouter.get('/', async (req, res) => {
   const uid = req.userId
-  const [user, categories, expenses, incomeSources] = await Promise.all([
+  const [user, categories, expenses, incomeSources, contributions] = await Promise.all([
     prisma.user.findUnique({ where: { id: uid }, select: { filingStatus: true, stateRate: true } }),
     prisma.category.findMany({ where: { userId: uid, isActive: true } }),
     prisma.expenseItem.findMany({ where: { userId: uid, isActive: true, kind: 'RECURRING' } }),
     prisma.incomeSource.findMany({ where: { userId: uid, isActive: true }, include: { deductions: true } }),
+    prisma.contribution.findMany({ where: { userId: uid, isActive: true } }),
   ])
 
   const monthlyOf = (amount: unknown, count: number, unit: IntervalUnit) =>
@@ -45,6 +46,10 @@ budgetsRouter.get('/', async (req, res) => {
   // same thing on every page (they previously used gross here, net there).
   const defaults = { filingStatus: user?.filingStatus ?? null, stateRate: user?.stateRate != null ? Number(user.stateRate) : null }
   const totalIncome = incomeSources.reduce((s, i) => s + estimateTax(i, defaults).netMonthly, 0)
+
+  // The savings bucket is mostly Contribution rows, not expenses — without
+  // them it read $0 while the dashboard showed real savings.
+  actualByBucket.SAVINGS += contributions.reduce((s, c) => s + monthlyOf(c.amount, c.intervalCount, c.intervalUnit), 0)
 
   const buckets = (['ESSENTIAL', 'DISCRETIONARY', 'SAVINGS'] as const).map((bucket) => {
     const actual = actualByBucket[bucket]

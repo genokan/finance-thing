@@ -246,6 +246,13 @@ function Waterfall({ d }: { d: DashboardData }) {
           )
         })}
       </div>
+
+      {/* Withheld before net income, so it sits outside the waterfall above. */}
+      {d.payrollContributions > 0 && (
+        <div className="note num" style={{ marginBottom: 0, marginTop: 10 }}>
+          Plus {money(d.payrollContributions)}/mo into linked accounts via payroll (401k, HSA, …) — withheld before take-home pay.
+        </div>
+      )}
     </div>
   )
 }

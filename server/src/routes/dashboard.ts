@@ -3,7 +3,7 @@ import { prisma } from '../lib/prisma'
 import { toMonthlyEquivalent } from '../lib/monthlyEquivalent'
 import { accountValue, accountUnvested, isCashKind, isLiabilityKind } from '../lib/accountValue'
 import { debtPaymentInfo } from '../lib/debtPayment'
-import { estimateTax } from '../services/tax'
+import { estimateTax, linkedDeductionDeposits } from '../services/tax'
 import type { IntervalUnit } from '../generated/prisma/client'
 
 export const dashboardRouter = Router()
@@ -50,6 +50,12 @@ dashboardRouter.get('/', async (req, res) => {
   // Contributions are wealth-building (net-worth-neutral), tracked as their own band.
   const contributionsMonthly = contributions.reduce((s, c) => s + monthlyOf(c.amount, c.intervalCount, c.intervalUnit), 0)
   const unallocated = netMonthly - totalExpenses - contributionsMonthly
+  // Payroll deductions into linked accounts (401k/HSA) — wealth-building money
+  // withheld before net income, so it sits outside the net-income waterfall.
+  const payrollContributions = incomeSources.reduce(
+    (s, i) => s + linkedDeductionDeposits(i).reduce((x, d) => x + d.monthlyAmount, 0),
+    0,
+  )
 
   const now = new Date()
   const ninetyOut = new Date(now.getTime() + 90 * 86400000)
@@ -71,6 +77,7 @@ dashboardRouter.get('/', async (req, res) => {
     discretionaryExpenses: r2(discretionary),
     debtPayments: r2(debtPayments),
     contributions: r2(contributionsMonthly),
+    payrollContributions: r2(payrollContributions),
     unallocated: r2(unallocated),
     totalDebt: r2(totalDebtPrincipal),
     fiftyThirtyTwenty: {

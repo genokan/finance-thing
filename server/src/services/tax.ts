@@ -57,6 +57,18 @@ function annualDeductions(src: SourceForTax) {
 }
 
 /**
+ * Payroll deductions that deposit into a linked account (401k, HSA, ESPP…) are
+ * money the user keeps: already excluded from net income, but they must land
+ * in the account for net-worth math (dashboard, projections) to see them.
+ */
+export function linkedDeductionDeposits(src: SourceForTax): { accountId: string; monthlyAmount: number }[] {
+  const periods = PERIODS_PER_YEAR[src.payFrequency]
+  return (src.deductions ?? [])
+    .filter((d) => d.linkedAccountId)
+    .map((d) => ({ accountId: d.linkedAccountId as string, monthlyAmount: (Number(d.amount) * periods) / 12 }))
+}
+
+/**
  * Estimate take-home for an income source.
  * FLAT: total tax = gross * flatEffectiveRate.
  * BRACKET: real federal brackets + FICA + flat state rate; pre-tax deductions

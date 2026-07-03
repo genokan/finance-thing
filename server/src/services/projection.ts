@@ -35,6 +35,12 @@ export interface SimContribution {
   accountId?: string | null
   /** Extra principal toward the highest-APR live debt instead of a deposit. */
   extraDebt?: boolean
+  /**
+   * Withheld from pay before net income (401k/HSA/ESPP payroll deductions):
+   * deposits into the account without touching monthly cash flow, which
+   * already excludes it.
+   */
+  payroll?: boolean
 }
 
 export interface ProjectionInputs {
@@ -216,7 +222,7 @@ export function project(inputs: ProjectionInputs, assumptions: Assumptions, modi
       }
       const dest = (c.accountId && accounts.find((a) => a.id === c.accountId)) || bestCash
       dest.value += c.monthlyAmount
-      flow -= c.monthlyAmount
+      if (!c.payroll) flow -= c.monthlyAmount
     }
 
     // 4. Modifiers.

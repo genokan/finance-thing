@@ -44,9 +44,10 @@ usersRouter.post('/', validate(createUserSchema), async (req, res) => {
 usersRouter.post('/:id/reset-password', validate(resetPasswordSchema), async (req, res) => {
   const { newPassword } = req.body as z.infer<typeof resetPasswordSchema>
   try {
+    // tokenVersion bump revokes the user's existing sessions along with the reset.
     await prisma.user.update({
       where: { id: req.params.id as string },
-      data: { passwordHash: await bcrypt.hash(newPassword, 12) },
+      data: { passwordHash: await bcrypt.hash(newPassword, 12), tokenVersion: { increment: 1 } },
     })
     res.json({ ok: true })
   } catch {

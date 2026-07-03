@@ -30,15 +30,26 @@ authRouter.post('/login', authRateLimiter, validate(loginSchema), async (req, re
     res.status(401).json({ error: 'Invalid credentials' })
     return
   }
-  res.cookie('refreshToken', signRefreshToken(user.id), REFRESH_COOKIE)
+  res.cookie('refreshToken', signRefreshToken(user.id, user.tokenVersion), REFRESH_COOKIE)
   res.json({ accessToken: signAccessToken(user.id) })
 })
 
-authRouter.post('/refresh', (req, res) => {
+// Refresh is the stateful checkpoint: the user must still exist and the
+// token's version must match (password changes bump it). A deleted user's
+// session dies here instead of coasting on a valid signature.
+authRouter.post('/refresh', async (req, res) => {
   const token = req.cookies?.refreshToken
   if (!token) { res.status(401).json({ error: 'No refresh token' }); return }
   try {
-    const { userId } = verifyRefreshToken(token)
+    const { userId, tokenVersion } = verifyRefreshToken(token)
+    const user = await prisma.user.findUnique({ where: { id: userId }, select: { tokenVersion: true } })
+    if (!user || user.tokenVersion !== tokenVersion) {
+      res.clearCookie('refreshToken', { path: '/api/auth/refresh' })
+      res.status(401).json({ error: 'Session expired' })
+      return
+    }
+    // Rotate the refresh cookie so an active session slides its 7-day window.
+    res.cookie('refreshToken', signRefreshToken(userId, user.tokenVersion), REFRESH_COOKIE)
     res.json({ accessToken: signAccessToken(userId) })
   } catch {
     res.status(401).json({ error: 'Invalid refresh token' })
@@ -64,6 +75,12 @@ authRouter.post('/change-password', authenticate, validate(changePasswordSchema)
     res.status(401).json({ error: 'Current password is incorrect' })
     return
   }
-  await prisma.user.update({ where: { id: user.id }, data: { passwordHash: await bcrypt.hash(newPassword, 12) } })
+  // Bump tokenVersion to revoke every other session, then re-issue this
+  // device's refresh cookie so the user changing their password stays in.
+  const updated = await prisma.user.update({
+    where: { id: user.id },
+    data: { passwordHash: await bcrypt.hash(newPassword, 12), tokenVersion: { increment: 1 } },
+  })
+  res.cookie('refreshToken', signRefreshToken(updated.id, updated.tokenVersion), REFRESH_COOKIE)
   res.json({ ok: true })
 })

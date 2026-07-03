@@ -151,6 +151,22 @@ describe('cash flow settlement', () => {
     expect(at(r, 1).cash).toBe(0) // remaining 400 surplus × 0% saved
   })
 
+  it('payroll contributions deposit without draining cash flow', () => {
+    // $500/mo 401k withheld pre-net: the account grows but cash flow (already
+    // net of the deduction) is untouched — income still lands in cash whole.
+    const r = project(
+      base({
+        accounts: [cash(0), invest(0)],
+        netMonthlyIncome: 1000,
+        contributions: [{ monthlyAmount: 500, accountId: 'i1', payroll: true }],
+      }),
+      assume({ horizonMonths: 2, savingsRatePct: 100, investmentReturnPct: 0 }),
+      [],
+    )
+    expect(at(r, 2).investments).toBe(1000) // 500 × 2 deposited
+    expect(at(r, 2).cash).toBe(2000) // full net income saved — no double subtraction
+  })
+
   it('sends EXTRA_DEBT contributions to the highest-APR debt first', () => {
     const r = project(
       base({

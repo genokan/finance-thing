@@ -30,16 +30,34 @@ function mapKind(type: string | null | undefined, subtype: string | null | undef
   }
 }
 
-export async function createLinkToken(userId: string): Promise<string> {
+export async function createLinkToken(userId: string, relinkItemId?: string): Promise<string> {
   // OAuth banks require a redirect URI that is also registered in the Plaid
   // dashboard. Optional in sandbox; required for OAuth institutions in production.
   const redirectUri = process.env.PLAID_REDIRECT_URI
+
+  // Update mode: re-authenticate an existing item (ITEM_LOGIN_REQUIRED) by
+  // passing its access token instead of requesting products.
+  if (relinkItemId) {
+    const item = await prisma.plaidItem.findFirst({ where: { itemId: relinkItemId, userId } })
+    if (!item) throw new Error('Item not found')
+    const res = await client().linkTokenCreate({
+      user: { client_user_id: userId },
+      client_name: 'finance-thing',
+      country_codes: [CountryCode.Us],
+      language: 'en',
+      access_token: decrypt(item.accessToken),
+      ...(redirectUri ? { redirect_uri: redirectUri } : {}),
+    })
+    return res.data.link_token
+  }
+
   const res = await client().linkTokenCreate({
     user: { client_user_id: userId },
     client_name: 'finance-thing',
     products: [Products.Assets],
     country_codes: [CountryCode.Us],
     language: 'en',
+    ...(process.env.PLAID_WEBHOOK_URL ? { webhook: process.env.PLAID_WEBHOOK_URL } : {}),
     ...(redirectUri ? { redirect_uri: redirectUri } : {}),
   })
   return res.data.link_token
@@ -50,6 +68,15 @@ export async function exchangePublicToken(publicToken: string, institutionName: 
   const institution = await prisma.institution.upsert({ where: { name: institutionName }, create: { name: institutionName }, update: {} })
   await prisma.plaidItem.create({ data: { userId, institutionId: institution.id, accessToken: encrypt(data.access_token), itemId: data.item_id } })
 }
+
+// Plaid SDK errors are axios errors carrying the Plaid error body.
+function plaidErrorCode(err: unknown): string | null {
+  const data = (err as { response?: { data?: { error_code?: string } } })?.response?.data
+  return data?.error_code ?? null
+}
+
+// Error codes that mean the user must re-authenticate via Link update mode.
+const REAUTH_CODES = new Set(['ITEM_LOGIN_REQUIRED', 'ITEM_LOCKED', 'USER_PERMISSION_REVOKED', 'ACCESS_NOT_GRANTED'])
 
 // Pull balances for the user's linked items into Account rows (one per Plaid
 // account, matched by plaidItemId + name). Read-only; balances only.
@@ -85,11 +112,41 @@ export async function syncAllBalances(userId: string): Promise<{ synced: number;
         if (isLiabilityKind(kind)) await ensureDebtForAccount(row)
         synced++
       }
-    } catch {
+      // A successful pull proves the credentials work — clear any stale flag.
+      await prisma.plaidItem.update({ where: { id: item.id }, data: { lastSyncedAt: new Date(), needsReauth: false } })
+    } catch (err) {
       failed.push(item.institution.name)
+      if (REAUTH_CODES.has(plaidErrorCode(err) ?? '')) {
+        await prisma.plaidItem.update({ where: { id: item.id }, data: { needsReauth: true } })
+      }
     }
   }
   return { synced, failed }
+}
+
+/** Clear the re-auth flag after a successful Link update-mode session. */
+export async function markItemRelinked(itemId: string, userId: string): Promise<void> {
+  const item = await prisma.plaidItem.findFirst({ where: { itemId, userId } })
+  if (!item) throw new Error('Not found')
+  await prisma.plaidItem.update({ where: { id: item.id }, data: { needsReauth: false } })
+}
+
+/**
+ * Plaid ITEM webhooks flip the re-auth flag. The payload is treated as an
+ * untrusted hint: it can only toggle a flag on an item_id that already exists,
+ * never expose or modify financial data, so skipping Plaid's JWT verification
+ * is an acceptable trade for a self-hosted deployment.
+ */
+export async function handleWebhook(body: { webhook_type?: string; webhook_code?: string; item_id?: string }): Promise<void> {
+  if (body.webhook_type !== 'ITEM' || !body.item_id) return
+  const needsReauth =
+    body.webhook_code === 'ERROR' ||
+    body.webhook_code === 'PENDING_EXPIRATION' ||
+    body.webhook_code === 'PENDING_DISCONNECT' ||
+    body.webhook_code === 'USER_PERMISSION_REVOKED'
+  const repaired = body.webhook_code === 'LOGIN_REPAIRED'
+  if (!needsReauth && !repaired) return
+  await prisma.plaidItem.updateMany({ where: { itemId: body.item_id }, data: { needsReauth } })
 }
 
 export async function listItems(userId: string) {
@@ -103,6 +160,8 @@ export async function listItems(userId: string) {
     institution: i.institution.name,
     accountCount: i._count.accounts,
     createdAt: i.createdAt,
+    needsReauth: i.needsReauth,
+    lastSyncedAt: i.lastSyncedAt,
   }))
 }
 

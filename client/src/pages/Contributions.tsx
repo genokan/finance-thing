@@ -1,7 +1,8 @@
 import { useState, type FormEvent } from 'react'
+import { Link } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from '../api/client'
-import type { Account, Contribution, ContributionKind, IntervalUnit } from '../api/types'
+import type { Account, Contribution, ContributionKind, IncomeSource, IntervalUnit, PayFrequency } from '../api/types'
 import { AmountCell, Card, DeleteButton, EditButton, Empty, Field, Loading, MoneyInput, Modal, SectionHead } from '../components/ui'
 import { intervalLabel, money } from '../lib/format'
 
@@ -9,10 +10,15 @@ const KIND_LABELS: Record<ContributionKind, string> = {
   RETIREMENT: 'Retirement', SAVINGS: 'Savings', BROKERAGE: 'Brokerage', EXTRA_DEBT: 'Extra debt', OTHER: 'Other',
 }
 
+const PERIODS_PER_YEAR: Record<PayFrequency, number> = {
+  WEEKLY: 52, BIWEEKLY: 26, SEMIMONTHLY: 24, MONTHLY: 12, ANNUAL: 1,
+}
+
 export function Contributions() {
   const qc = useQueryClient()
   const contributions = useQuery({ queryKey: ['contributions'], queryFn: () => api.get<Contribution[]>('/api/contributions') })
   const accounts = useQuery({ queryKey: ['accounts'], queryFn: () => api.get<Account[]>('/api/accounts') })
+  const income = useQuery({ queryKey: ['income'], queryFn: () => api.get<IncomeSource[]>('/api/income') })
   const [open, setOpen] = useState(false)
   const [editing, setEditing] = useState<Contribution | null>(null)
 
@@ -27,14 +33,34 @@ export function Contributions() {
   })
   const remove = useMutation({ mutationFn: (id: string) => api.del(`/api/contributions/${id}`), onSuccess: invalidate })
 
-  if (contributions.isLoading || accounts.isLoading) return <Loading />
+  if (contributions.isLoading || accounts.isLoading || income.isLoading) return <Loading />
   const items = contributions.data ?? []
   const total = items.reduce((s, c) => s + c.monthlyEquivalent, 0)
+
+  // Payroll deductions with a linked account are contributions too — entered
+  // once (on Income), shown here read-only so nothing wealth-building is hidden.
+  const accountName = new Map((accounts.data ?? []).map((a) => [a.id, a.name]))
+  const payroll = (income.data ?? []).flatMap((src) =>
+    src.deductions
+      .filter((d) => d.linkedAccountId)
+      .map((d) => ({
+        key: `${src.id}-${d.name}`,
+        name: d.name,
+        source: src.name,
+        preTax: d.preTax,
+        accountLabel: accountName.get(d.linkedAccountId!) ?? 'Linked account',
+        monthly: (Number(d.amount) * PERIODS_PER_YEAR[src.payFrequency]) / 12,
+      })),
+  )
+  const payrollTotal = payroll.reduce((s, p) => s + p.monthly, 0)
 
   return (
     <div>
       <h1 className="page-title">Contributions</h1>
-      <p className="page-sub num">{money(total, true)}/mo to savings &amp; investing · {items.length} items</p>
+      <p className="page-sub num">
+        {money(total, true)}/mo from take-home
+        {payrollTotal > 0 ? ` · ${money(payrollTotal, true)}/mo via payroll` : ''} · savings &amp; investing
+      </p>
       <p className="page-note">
         Money you move into assets (retirement, savings, brokerage) or extra debt principal. Builds net worth — not counted as outflow.
       </p>
@@ -62,6 +88,30 @@ export function Contributions() {
           </div>
         )}
       </Card>
+
+      {payroll.length > 0 && (
+        <>
+          <SectionHead
+            title="Via payroll"
+            action={<Link to="/income" className="dim" style={{ fontSize: 13 }}>Edit on Income →</Link>}
+          />
+          <Card>
+            <div className="list">
+              {payroll.map((p) => (
+                <div className="row" key={p.key}>
+                  <div className="main">
+                    <div className="name">
+                      {p.name} <span className="badge neutral">{p.preTax ? 'pre-tax' : 'post-tax'}</span>
+                    </div>
+                    <div className="meta">→ {p.accountLabel} · withheld from {p.source}</div>
+                  </div>
+                  <AmountCell value={money(p.monthly, true)} label="Per month" />
+                </div>
+              ))}
+            </div>
+          </Card>
+        </>
+      )}
 
       {open && (
         <ContributionModal

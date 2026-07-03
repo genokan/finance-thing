@@ -180,6 +180,7 @@ export interface Dashboard {
   discretionaryExpenses: number
   debtPayments: number
   contributions: number
+  payrollContributions: number
   unallocated: number
   totalDebt: number
   fiftyThirtyTwenty: { needsPercent: number; wantsPercent: number; savingsPercent: number }
@@ -199,6 +200,15 @@ export interface BudgetOverview {
   totalMonthlyIncome: number
   buckets: { bucket: BudgetBucket; actual: number; percentOfIncome: number }[]
   categories: { id: string; name: string; parentId: string | null; bucket: BudgetBucket; monthlyBudget: number | null; actual: number }[]
+}
+
+export interface SnapshotSeriesPoint {
+  year: number
+  month: number
+  netWorth: number
+  liquidNetWorth: number | null
+  assets: number
+  debt: number
 }
 
 export interface SnapshotListItem {

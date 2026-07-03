@@ -20,7 +20,7 @@ import { scenariosRouter } from './routes/scenarios'
 import { insightsRouter } from './routes/insights'
 import { settingsRouter } from './routes/settings'
 import { usersRouter } from './routes/users'
-import { plaidRouter } from './routes/plaid'
+import { plaidRouter, plaidWebhookRouter } from './routes/plaid'
 import { globalRateLimiter } from './middleware/rateLimiter'
 import { authenticate } from './middleware/auth'
 import pinoHttp from 'pino-http'
@@ -46,6 +46,8 @@ export function createApp() {
   app.use('/api/auth', authRouter)
   // Browser log ingestion is public so pre-login client errors still report.
   app.use('/api/client-logs', clientLogsRouter)
+  // Plaid webhooks are unauthenticated by nature (Plaid is the caller).
+  app.use('/api/plaid/webhook', plaidWebhookRouter)
 
   // Protected routes — skip /api/auth which is handled above
   app.use('/api', (req: Request, res: Response, next: NextFunction) => {
