@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import type { BudgetBucket } from '../api/types'
 
@@ -125,11 +125,47 @@ export function Loading() {
 
 export function Bar({ pct, tone = 'accent' }: { pct: number; tone?: string }) {
   const color =
-    tone === 'pos' ? 'var(--positive)' : tone === 'neg' ? 'var(--negative)' : 'var(--accent)'
+    tone === 'pos' ? 'var(--positive)'
+    : tone === 'neg' ? 'var(--negative)'
+    : tone === 'info' ? 'var(--indigo)'
+    : 'var(--accent)'
   return (
     <div className="bar">
       <span style={{ width: `${Math.max(0, Math.min(100, pct))}%`, background: color }} />
     </div>
+  )
+}
+
+/** Pencil icon button with an accessible name. */
+export function EditButton({ onClick, label }: { onClick: () => void; label: string }) {
+  return (
+    <button type="button" className="iconbtn" aria-label={label} title={label} onClick={onClick}>
+      ✎
+    </button>
+  )
+}
+
+/**
+ * Two-step destructive button: first click arms it ("Sure?"), second click
+ * within 2.5s confirms. Guards every delete in the app against mis-taps.
+ */
+export function DeleteButton({ onDelete, label }: { onDelete: () => void; label: string }) {
+  const [arming, setArming] = useState(false)
+  useEffect(() => {
+    if (!arming) return
+    const t = setTimeout(() => setArming(false), 2500)
+    return () => clearTimeout(t)
+  }, [arming])
+  return (
+    <button
+      type="button"
+      className={`iconbtn ${arming ? 'confirming' : ''}`}
+      aria-label={arming ? `Confirm — ${label}` : label}
+      title={label}
+      onClick={() => (arming ? onDelete() : setArming(true))}
+    >
+      {arming ? 'Sure?' : '✕'}
+    </button>
   )
 }
 
@@ -180,6 +216,8 @@ export function Field({
   )
 }
 
+// Native <dialog> — Escape, focus containment, ::backdrop, and scroll lock
+// come from the platform instead of JS.
 export function Modal({
   title,
   onClose,
@@ -189,12 +227,35 @@ export function Modal({
   onClose: () => void
   children: ReactNode
 }) {
+  const ref = useRef<HTMLDialogElement>(null)
+
+  useEffect(() => {
+    ref.current?.showModal()
+    document.body.style.overflow = 'hidden'
+    return () => {
+      document.body.style.overflow = ''
+    }
+  }, [])
+
+  // Clicks that land outside the dialog's box hit the ::backdrop region.
+  const onBackdropClick = (e: React.MouseEvent<HTMLDialogElement>) => {
+    const r = ref.current?.getBoundingClientRect()
+    if (!r) return
+    if (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom) onClose()
+  }
+
   return (
-    <div className="modal-backdrop" onClick={onClose}>
-      <div className="modal" onClick={(e) => e.stopPropagation()}>
-        <h3>{title}</h3>
-        {children}
-      </div>
-    </div>
+    <dialog
+      ref={ref}
+      className="modal"
+      onCancel={(e) => {
+        e.preventDefault() // let React unmount it instead of a silent native close
+        onClose()
+      }}
+      onClick={onBackdropClick}
+    >
+      <h3>{title}</h3>
+      {children}
+    </dialog>
   )
 }

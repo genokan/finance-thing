@@ -2,12 +2,13 @@ import { useState, type FormEvent } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from '../api/client'
 import type { BudgetBucket, BudgetOverview, Category } from '../api/types'
-import { Bar, Card, Field, Loading, MoneyInput, Modal, SectionHead } from '../components/ui'
+import { Bar, BucketBadge, Card, DeleteButton, EditButton, Field, Loading, MoneyInput, Modal, SectionHead } from '../components/ui'
 import { money, percent } from '../lib/format'
 
+// Tones match the bucket colors used everywhere else: gold / indigo / mint.
 const BUCKETS: { key: BudgetBucket; label: string; target: number; tone: string }[] = [
   { key: 'ESSENTIAL', label: 'Needs (essential)', target: 50, tone: 'accent' },
-  { key: 'DISCRETIONARY', label: 'Wants (discretionary)', target: 30, tone: 'accent' },
+  { key: 'DISCRETIONARY', label: 'Wants (discretionary)', target: 30, tone: 'info' },
   { key: 'SAVINGS', label: 'Savings', target: 20, tone: 'pos' },
 ]
 
@@ -41,7 +42,7 @@ export function Budgets() {
   return (
     <div>
       <h1 className="page-title">Budgets</h1>
-      <p className="page-sub num">{money(ov.totalMonthlyIncome)}/mo income · 50 / 30 / 20 framework</p>
+      <p className="page-sub num">{money(ov.totalMonthlyIncome)}/mo net income · 50 / 30 / 20 framework</p>
 
       <Card>
         {BUCKETS.map((b) => {
@@ -62,7 +63,7 @@ export function Budgets() {
       <SectionHead
         title="Categories"
         action={
-          <div style={{ display: 'flex', gap: 8 }}>
+          <div className="cluster">
             <button className="btn ghost sm" onClick={() => seedDefaults.mutate()} disabled={seedDefaults.isPending}>
               {seedDefaults.isPending ? 'Adding…' : 'Add common categories'}
             </button>
@@ -70,7 +71,7 @@ export function Budgets() {
           </div>
         }
       />
-      <p className="page-sub" style={{ marginTop: -4 }}>
+      <p className="page-note">
         Categories work without budgets — a monthly target is optional. Use “Add common categories” for a starter set.
       </p>
       <Card>
@@ -99,8 +100,6 @@ export function Budgets() {
   )
 }
 
-const BUCKET_BADGE: Record<BudgetBucket, string> = { ESSENTIAL: 'neutral', DISCRETIONARY: 'warn', SAVINGS: 'good' }
-
 function CategoryRow({
   cat, actual, indent, onEdit, onDelete,
 }: {
@@ -115,15 +114,16 @@ function CategoryRow({
   return (
     <div className="row" style={indent ? { paddingLeft: 20 } : undefined}>
       <div className="main">
-        <div className="name">{indent ? '↳ ' : ''}{cat.name} <span className={`badge ${BUCKET_BADGE[cat.bucket]}`}>{cat.bucket.toLowerCase()}</span></div>
+        {/* BucketBadge keeps bucket naming/colors identical to every other page. */}
+        <div className="name">{indent ? '↳ ' : ''}{cat.name} <BucketBadge bucket={cat.bucket} /></div>
         <div className="meta num">
           {money(actual)} spent{budget != null ? ` of ${money(budget)} budget` : ' · no budget set'}
           {over ? <span className="neg"> · over</span> : null}
         </div>
       </div>
       <div className="right">
-        <button className="iconbtn" onClick={onEdit}>✎</button>
-        <button className="iconbtn" onClick={onDelete}>✕</button>
+        <EditButton label={`Edit ${cat.name}`} onClick={onEdit} />
+        <DeleteButton label={`Delete ${cat.name}`} onDelete={onDelete} />
       </div>
     </div>
   )

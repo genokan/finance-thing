@@ -44,13 +44,13 @@ function UserMenu() {
         <span className="dim">▾</span>
       </button>
       {open && (
-        <div className="usermenu-dropdown">
+        <div className="menu">
           <div className="head">
             <div className="label">Signed in as</div>
             <div className="val num">{email}</div>
           </div>
-          <button className="usermenu-item" onClick={() => { setOpen(false); navigate('/settings') }}>⚙ Settings</button>
-          <button className="usermenu-item danger" onClick={() => logout()}>⎋ Sign out</button>
+          <button className="menu-item" onClick={() => { setOpen(false); navigate('/settings') }}>⚙ Settings</button>
+          <button className="menu-item danger" onClick={() => logout()}>⎋ Sign out</button>
         </div>
       )}
     </div>

@@ -2,7 +2,7 @@ import { useState, type FormEvent } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from '../api/client'
 import type { Account, IncomeSource, IncomeType, PayFrequency, TaxMode, FilingStatus, Deduction, Distribution } from '../api/types'
-import { Card, Empty, Field, Loading, MoneyInput, Modal, SectionHead } from '../components/ui'
+import { Card, DeleteButton, EditButton, Empty, Field, Loading, MoneyInput, Modal, SectionHead } from '../components/ui'
 import { money, percent } from '../lib/format'
 
 const FREQ_LABELS: Record<PayFrequency, string> = {
@@ -44,14 +44,14 @@ export function Income() {
         <div className="grid">
           {income.data.map((src) => (
             <Card key={src.id}>
-              <div className="row" style={{ paddingTop: 0 }}>
+              <div className="row lead">
                 <div className="main">
                   <div className="name">{src.name} <span className="badge neutral">{src.type}</span></div>
                   <div className="meta num">{money(src.tax.grossAnnual)}/yr gross · {FREQ_LABELS[src.payFrequency]}</div>
                 </div>
                 <div className="right">
-                  <button className="iconbtn" onClick={() => { setEditing(src); setOpen(true) }}>✎</button>
-                  <button className="iconbtn" onClick={() => remove.mutate(src.id)}>✕</button>
+                  <EditButton label={`Edit ${src.name}`} onClick={() => { setEditing(src); setOpen(true) }} />
+                  <DeleteButton label={`Delete ${src.name}`} onDelete={() => remove.mutate(src.id)} />
                 </div>
               </div>
 
@@ -61,7 +61,7 @@ export function Income() {
                 <div style={{ marginTop: 10 }}>
                   <div className="stat-label" style={{ marginBottom: 4 }}>Distribution</div>
                   {src.distributions.map((d, i) => (
-                    <div className="row" key={i} style={{ padding: '6px 4px' }}>
+                    <div className="row sub" key={i}>
                       <span className="dim">{d.account?.name ?? 'Unassigned'}</span>
                       <span className="num">{money(d.amount, true)}</span>
                     </div>
@@ -104,12 +104,12 @@ function TaxBreakdownView({ src }: { src: IncomeSource }) {
         {' '}<span className="dim num">{percent(t.effectiveRate * 100, 1)} effective</span>
       </div>
       {rows.filter(([, v]) => v !== 0).map(([label, v]) => (
-        <div className="row" key={label} style={{ padding: '5px 4px' }}>
+        <div className="row sub" key={label}>
           <span className="dim">{label}</span>
           <span className={`num ${v < 0 ? 'neg' : ''}`}>{money(v)}</span>
         </div>
       ))}
-      <div className="row" style={{ padding: '6px 4px' }}>
+      <div className="row sub">
         <span>Net take-home</span>
         <span className="num pos">{money(t.netAnnual)}/yr · {money(t.netMonthly)}/mo</span>
       </div>
@@ -212,10 +212,10 @@ function IncomeModal({
             <div className="field-row">
               <input className="input" placeholder="e.g. 401k" value={d.name} onChange={(e) => setDeductions(deductions.map((x, j) => j === i ? { ...x, name: e.target.value } : x))} />
               <MoneyInput value={d.amount} onChange={(v) => setDeductions(deductions.map((x, j) => j === i ? { ...x, amount: v } : x))} placeholder="Amount" />
-              <button type="button" className="iconbtn" onClick={() => setDeductions(deductions.filter((_, j) => j !== i))}>✕</button>
+              <button type="button" className="iconbtn" aria-label={`Remove deduction ${d.name || i + 1}`} onClick={() => setDeductions(deductions.filter((_, j) => j !== i))}>✕</button>
             </div>
             <div className="field-row" style={{ marginTop: 4 }}>
-              <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13 }}>
+              <label className="check" style={{ margin: 0, fontSize: 13 }}>
                 <input type="checkbox" checked={d.preTax} onChange={(e) => setDeductions(deductions.map((x, j) => j === i ? { ...x, preTax: e.target.checked } : x))} /> Pre-tax
               </label>
               <select className="input" value={d.linkedAccountId} onChange={(e) => setDeductions(deductions.map((x, j) => j === i ? { ...x, linkedAccountId: e.target.value } : x))}>
@@ -235,7 +235,7 @@ function IncomeModal({
               {accounts.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
             </select>
             <MoneyInput value={d.amount} onChange={(v) => setDists(dists.map((x, j) => j === i ? { ...x, amount: v } : x))} placeholder="Amount" />
-            <button type="button" className="iconbtn" onClick={() => setDists(dists.filter((_, j) => j !== i))}>✕</button>
+            <button type="button" className="iconbtn" aria-label={`Remove destination ${i + 1}`} onClick={() => setDists(dists.filter((_, j) => j !== i))}>✕</button>
           </div>
         ))}
         <button type="button" className="btn ghost sm" onClick={() => setDists([...dists, { accountId: '', amount: '' }])}>+ Add destination</button>

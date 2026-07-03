@@ -13,8 +13,10 @@ const usdCents = new Intl.NumberFormat('en-US', {
 })
 
 export function money(value: number | string | null | undefined, cents = false): string {
-  const n = typeof value === 'string' ? Number(value) : (value ?? 0)
+  let n = typeof value === 'string' ? Number(value) : (value ?? 0)
   if (Number.isNaN(n)) return '$0'
+  // Zero is never signed — avoids "-$0" from negated zero values.
+  if (Math.abs(n) < 0.005) n = 0
   return cents ? usdCents.format(n) : usd.format(n)
 }
 

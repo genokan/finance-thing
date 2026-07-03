@@ -2,7 +2,7 @@ import { useEffect, useState, type FormEvent } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api, ApiError } from '../api/client'
 import type { FilingStatus, ManagedInstitution, ManagedUser, Settings } from '../api/types'
-import { Card, Empty, Field, Loading, Modal, SectionHead } from '../components/ui'
+import { Card, DeleteButton, Empty, Field, Loading, Modal, SectionHead } from '../components/ui'
 import { dateLabel } from '../lib/format'
 import { PASSWORD_RULES, validatePassword } from '../lib/password'
 
@@ -47,11 +47,11 @@ export function SettingsPage() {
         <Field label="Benchmark APY %">
           <input className="input num" type="number" step="0.01" min="0" max="100" value={rate} onChange={(e) => setRate(e.target.value)} style={{ maxWidth: 220 }} />
         </Field>
-        <p className="dim" style={{ fontSize: 13, margin: '-6px 0 14px' }}>
+        <p className="note">
           Your best current safe return (e.g. HYSA APY). Used for debt opportunity-cost analysis.
         </p>
 
-        <div className="field-row" style={{ maxWidth: 460 }}>
+        <div className="field-row w-narrow">
           <Field label="Tax filing status (default)">
             <select className="input" value={filingStatus} onChange={(e) => setFilingStatus(e.target.value as FilingStatus | '')}>
               <option value="">— not set —</option>
@@ -65,11 +65,11 @@ export function SettingsPage() {
             <input className="input num" type="number" step="0.01" min="0" max="100" value={statePct} onChange={(e) => setStatePct(e.target.value)} />
           </Field>
         </div>
-        <p className="dim" style={{ fontSize: 13, margin: '-6px 0 14px' }}>
+        <p className="note">
           Defaults for bracket-based income tax estimates (each income source can override).
         </p>
 
-        {save.isSuccess && <div className="dim">Saved.</div>}
+        {save.isSuccess && <div className="success-text">Saved.</div>}
         {save.isError && <div className="error-text">Could not save.</div>}
         <button className="btn" onClick={() => save.mutate()} disabled={save.isPending} style={{ marginTop: 4 }}>
           {save.isPending ? 'Saving…' : 'Save'}
@@ -138,13 +138,13 @@ function ChangePasswordSection() {
   return (
     <>
       <SectionHead title="Password" />
-      <form className="card" onSubmit={submit} style={{ maxWidth: 460 }}>
+      <form className="card w-narrow" onSubmit={submit}>
         <Field label="Current password"><PasswordInput value={current} onChange={setCurrent} autoComplete="current-password" /></Field>
         <Field label="New password"><PasswordInput value={next} onChange={setNext} autoComplete="new-password" /></Field>
         <Field label="Confirm new password"><PasswordInput value={confirm} onChange={setConfirm} autoComplete="new-password" /></Field>
-        <p className="dim" style={{ fontSize: 12, margin: '-6px 0 12px' }}>{PASSWORD_RULES}</p>
+        <p className="note">{PASSWORD_RULES}</p>
         {error && <div className="error-text">{error}</div>}
-        {change.isSuccess && <div className="dim">Password updated.</div>}
+        {change.isSuccess && <div className="success-text">Password updated.</div>}
         <button className="btn" type="submit" disabled={change.isPending} style={{ marginTop: 4 }}>
           {change.isPending ? 'Updating…' : 'Change password'}
         </button>
@@ -168,7 +168,7 @@ function InstitutionsSection() {
   return (
     <>
       <SectionHead title="Institutions" />
-      <p className="page-sub" style={{ marginTop: -4 }}>
+      <p className="page-note">
         Created automatically when you add accounts. Rename to tidy duplicates; delete only when nothing links to them.
       </p>
       <Card>
@@ -188,7 +188,7 @@ function InstitutionsSection() {
                   </div>
                   <div className="right">
                     <button className="btn ghost sm" onClick={() => setRenaming(inst)}>Rename</button>
-                    <button className="iconbtn" title="Delete institution" onClick={() => remove.mutate(inst.id)}>✕</button>
+                    <DeleteButton label={`Delete ${inst.name}`} onDelete={() => remove.mutate(inst.id)} />
                   </div>
                 </div>
               )
@@ -280,7 +280,7 @@ function UsersSection() {
                 </div>
                 <div className="right">
                   <button className="btn ghost sm" onClick={() => setResetting(u)}>Reset password</button>
-                  <button className="iconbtn" title="Delete user" onClick={() => remove.mutate(u.id)}>✕</button>
+                  <DeleteButton label={`Delete ${u.email}`} onDelete={() => remove.mutate(u.id)} />
                 </div>
               </div>
             ))}
@@ -294,8 +294,8 @@ function UsersSection() {
           <Field label="Email"><input className="input" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required /></Field>
           <Field label="Password"><PasswordInput value={password} onChange={setPassword} autoComplete="new-password" /></Field>
         </div>
-        <p className="dim" style={{ fontSize: 12, margin: '-6px 0 12px' }}>{PASSWORD_RULES}</p>
-        <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14, cursor: 'pointer' }}>
+        <p className="note">{PASSWORD_RULES}</p>
+        <label className="check">
           <input type="checkbox" checked={isAdmin} onChange={(e) => setIsAdmin(e.target.checked)} />
           <span>Grant admin access</span>
         </label>
@@ -329,7 +329,7 @@ function ResetPasswordModal({ user, onClose }: { user: ManagedUser; onClose: () 
     <Modal title={`Reset password — ${user.email}`} onClose={onClose}>
       <form onSubmit={submit}>
         <Field label="New password"><PasswordInput value={pw} onChange={setPw} autoComplete="new-password" /></Field>
-        <p className="dim" style={{ fontSize: 12, margin: '-6px 0 12px' }}>{PASSWORD_RULES}</p>
+        <p className="note">{PASSWORD_RULES}</p>
         {error && <div className="error-text">{error}</div>}
         <div className="modal-actions">
           <button type="button" className="btn ghost" onClick={onClose}>Cancel</button>

@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api, ApiError } from '../api/client'
 import type { Account, AccountKind, BudgetBucket, Debt, DebtKind, DebtTerm, Holding, Institution, TrackingMode } from '../api/types'
-import { AmountCell, BucketSelect, Card, Empty, Field, Loading, MoneyInput, Modal, SectionHead } from '../components/ui'
+import { AmountCell, BucketSelect, Card, DeleteButton, EditButton, Empty, Field, Loading, MoneyInput, Modal, SectionHead } from '../components/ui'
 import { PlaidConnect } from '../components/PlaidConnect'
 import { dateLabel, money } from '../lib/format'
 
@@ -114,7 +114,8 @@ export function Accounts() {
     <div>
       <h1 className="page-title">Accounts</h1>
       <p className="page-sub num">
-        <span className="pos">{money(assetsTotal)}</span> assets · <span className="neg">{money(liabilitiesTotal)}</span> owed
+        <span className="pos">{money(assetsTotal)}</span> assets ·{' '}
+        <span className={liabilitiesTotal > 0 ? 'neg' : undefined}>{money(liabilitiesTotal)}</span> owed
         {unvested > 0 ? ` · ${money(unvested)} unvested` : ''}
       </p>
 
@@ -124,7 +125,7 @@ export function Accounts() {
       <SectionHead
         title="Your accounts"
         action={
-          <div style={{ display: 'flex', gap: 8 }}>
+          <div className="cluster">
             <button className="btn ghost sm" onClick={() => refresh.mutate()} disabled={refresh.isPending}>
               {refresh.isPending ? 'Refreshing…' : '↻ Prices'}
             </button>
@@ -134,7 +135,7 @@ export function Accounts() {
       />
 
       {refresh.isSuccess && (
-        <div className="dim" style={{ marginBottom: 10 }}>
+        <div className="note">
           Updated {refresh.data.updated} holding(s){refresh.data.failed.length ? `, failed: ${refresh.data.failed.join(', ')}` : ''}.
         </div>
       )}
@@ -146,8 +147,8 @@ export function Accounts() {
           <div key={inst}>
             <div className="stat-label" style={{ margin: '18px 0 8px' }}>{inst}</div>
             {list.map((a) => (
-              <Card key={a.id} className="" >
-                <div className="row" style={{ paddingTop: 0 }}>
+              <Card key={a.id}>
+                <div className="row lead">
                   <div className="main">
                     <div className="name">{a.name} <span className="badge neutral">{KIND_LABELS[a.kind]}</span>{a.isEmergencyFund && <span className="badge good"> emergency fund</span>}</div>
                     <div className="meta">
@@ -163,23 +164,23 @@ export function Accounts() {
                       tone={isLiabilityKind(a.kind) ? 'neg' : undefined}
                       label={isLiabilityKind(a.kind) ? 'Owed' : isInvestmentKind(a.kind) ? 'Value' : 'Balance'}
                     />
-                    <button className="iconbtn" onClick={() => setAcctModal({ open: true, editing: a })}>✎</button>
-                    <button className="iconbtn" onClick={() => removeAccount.mutate(a.id)}>✕</button>
+                    <EditButton label={`Edit ${a.name}`} onClick={() => setAcctModal({ open: true, editing: a })} />
+                    <DeleteButton label={`Delete ${a.name}`} onDelete={() => removeAccount.mutate(a.id)} />
                   </div>
                 </div>
 
                 {a.trackingMode === 'HOLDINGS' && (
                   <div style={{ marginTop: 8 }}>
                     {a.holdings.map((h) => (
-                      <div className="row" key={h.id} style={{ padding: '8px 4px' }}>
+                      <div className="row sub" key={h.id}>
                         <div className="main">
                           <span>{h.label}</span> {h.ticker && <span className="dim">· {h.ticker}</span>}
                           {h.unvestedValue ? <span className="dim num"> · {money(h.unvestedValue)} unvested</span> : null}
                         </div>
                         <div className="right">
                           <span className="num">{money(h.value)}</span>
-                          <button className="iconbtn" onClick={() => setHoldingModal({ accountId: a.id, editing: h })}>✎</button>
-                          <button className="iconbtn" onClick={() => removeHolding.mutate({ accountId: a.id, id: h.id })}>✕</button>
+                          <EditButton label={`Edit ${h.label}`} onClick={() => setHoldingModal({ accountId: a.id, editing: h })} />
+                          <DeleteButton label={`Delete ${h.label}`} onDelete={() => removeHolding.mutate({ accountId: a.id, id: h.id })} />
                         </div>
                       </div>
                     ))}
@@ -354,11 +355,11 @@ export function AccountModal({
           </Field>
         )}
         {trackingMode === 'HOLDINGS' && (
-          <p className="dim" style={{ fontSize: 13, marginBottom: 12 }}>Value comes from the holdings you add to this account.</p>
+          <p className="note">Value comes from the holdings you add to this account.</p>
         )}
         {showDebtFields && (
           <>
-            <label style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '4px 0 12px', cursor: 'pointer' }}>
+            <label className="check">
               <input type="checkbox" checked={trackDebt} onChange={(e) => setTrackDebt(e.target.checked)} />
               <span>Track payoff terms (APR &amp; schedule) as a debt</span>
             </label>
@@ -371,7 +372,7 @@ export function AccountModal({
                 </div>
                 <div className="field-row">
                   <Field label="Term (months)"><input className="input num" type="number" min="1" value={termMonths} onChange={(e) => setTermMonths(e.target.value)} placeholder="e.g. 60" /></Field>
-                  <Field label="Monthly payment"><MoneyInput value={debtPayment} onChange={setDebtPayment} placeholder="blank = amortized min" /></Field>
+                  <Field label="Monthly payment (blank = min)"><MoneyInput value={debtPayment} onChange={setDebtPayment} placeholder="amortized" /></Field>
                 </div>
                 <Field label="Term type">
                   <select className="input" value={debtTerm} onChange={(e) => setDebtTerm(e.target.value as DebtTerm)}>
@@ -380,9 +381,9 @@ export function AccountModal({
                   </select>
                 </Field>
                 {debt && (
-                  <p className="dim" style={{ fontSize: 13, margin: '-4px 0 12px' }}>
+                  <p className="note">
                     0% promo, sub-category &amp; payoff date live on the{' '}
-                    <Link to="/debt" onClick={onClose}>Debt page</Link>.
+                    <Link to="/debt" onClick={onClose} className="accent">Debt page</Link>.
                   </p>
                 )}
               </>
@@ -390,7 +391,7 @@ export function AccountModal({
           </>
         )}
         {!isLiabilityKind(kind) && (
-          <label style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '4px 0 14px', cursor: 'pointer' }}>
+          <label className="check">
             <input type="checkbox" checked={isEmergencyFund} onChange={(e) => setIsEmergencyFund(e.target.checked)} />
             <span>This is my emergency fund</span>
           </label>
@@ -444,7 +445,7 @@ export function HoldingModal({
           <Field label="Value"><MoneyInput value={value} onChange={setValue} required /></Field>
           <Field label="Shares (enables price refresh)"><input className="input num" type="number" step="0.000001" value={shares} onChange={(e) => setShares(e.target.value)} /></Field>
         </div>
-        <p className="dim" style={{ fontSize: 13, margin: '4px 0 10px' }}>RSU? Use vested/unvested below (leave shares blank).</p>
+        <p className="note">RSU? Use vested/unvested below (leave shares blank).</p>
         <div className="field-row">
           <Field label="Vested shares"><input className="input num" type="number" step="0.000001" value={vestedShares} onChange={(e) => setVestedShares(e.target.value)} /></Field>
           <Field label="Unvested shares"><input className="input num" type="number" step="0.000001" value={unvestedShares} onChange={(e) => setUnvestedShares(e.target.value)} /></Field>

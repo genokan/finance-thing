@@ -1,0 +1,319 @@
+/* finance-thing app styles — everything specific to this app's shell and
+   pages. Generic, reusable pieces live in ui/glass.css (Glass UI). This file
+   is unlayered, so it wins over the library's @layer rules by default. */
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+/* ---------- App shell (top nav) ---------- */
+.app {
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
+}
+
+.topnav {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  background: rgba(10, 10, 17, 0.62);
+  backdrop-filter: blur(22px) saturate(160%);
+  -webkit-backdrop-filter: blur(22px) saturate(160%);
+  border-bottom: 1px solid var(--glass-border);
+}
+
+.topnav-inner {
+  max-width: var(--maxw);
+  margin: 0 auto;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  padding: 0 24px;
+  height: 64px;
+}
+
+:root {
+  --maxw: 1180px;
+}
+
+/* ---------- Brand lockup ---------- */
+.brand-lockup {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.32em;
+  flex-shrink: 0;
+  font-family: var(--font-display);
+  font-size: 21px;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+/* "finance" — brushed-gold gradient serif */
+.brand-fin {
+  font-weight: 600;
+  letter-spacing: -0.015em;
+  background: linear-gradient(96deg, #ffe2a8 0%, #f5b13d 52%, #c98213 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+/* "thing" — italic, understated, a touch of personality */
+.brand-thing {
+  font-style: italic;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  color: var(--text);
+}
+
+/* glowing gold coin-dot separator */
+.brand-sep {
+  width: 0.17em;
+  height: 0.17em;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 7px 1px rgba(245, 177, 61, 0.55);
+}
+
+.topnav-links {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  flex: 1;
+  min-width: 0;
+}
+
+.topnav-links::-webkit-scrollbar {
+  display: none;
+}
+
+.navlink {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 14px;
+  border-radius: 999px;
+  color: var(--text-dim);
+  font-weight: 500;
+  font-size: 14px;
+  white-space: nowrap;
+  transition: background 0.18s, color 0.18s, box-shadow 0.18s;
+}
+
+.navlink:hover {
+  background: var(--glass);
+  color: var(--text);
+}
+
+.navlink.active {
+  background: linear-gradient(180deg, rgba(245, 177, 61, 0.16), rgba(245, 177, 61, 0.08));
+  color: var(--accent-2);
+  box-shadow: inset 0 0 0 1px rgba(245, 177, 61, 0.25);
+}
+
+.navlink .ico {
+  font-size: 13px;
+  opacity: 0.85;
+}
+
+.content {
+  flex: 1;
+  min-width: 0;
+  padding: 36px 24px 110px;
+  max-width: var(--maxw);
+  margin: 0 auto;
+  width: 100%;
+  animation: fade-in 0.4s ease both;
+}
+
+.bottomnav {
+  display: none;
+}
+
+@media (max-width: 760px) {
+  .topnav-links {
+    display: none;
+  }
+  .content {
+    padding: 22px 16px 110px;
+  }
+  .bottomnav {
+    display: flex;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: rgba(10, 10, 17, 0.74);
+    backdrop-filter: blur(22px) saturate(160%);
+    -webkit-backdrop-filter: blur(22px) saturate(160%);
+    border-top: 1px solid var(--glass-border);
+    z-index: 50;
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  .bottomnav a {
+    flex: 1;
+    text-align: center;
+    padding: 10px 0;
+    color: var(--text-dim);
+    font-size: 11px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 3px;
+    min-height: 56px;
+    justify-content: center;
+  }
+  .bottomnav a.active {
+    color: var(--accent-2);
+  }
+  .bottomnav a .ico {
+    font-size: 18px;
+  }
+  .toaster {
+    bottom: 80px;
+    left: 16px;
+    right: 16px;
+    max-width: none;
+  }
+}
+
+/* ---------- User menu ---------- */
+.usermenu {
+  position: relative;
+  flex-shrink: 0;
+}
+
+.usermenu-trigger {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--glass);
+  border: 1px solid var(--glass-border);
+  border-radius: 99px;
+  padding: 5px 10px 5px 6px;
+  cursor: pointer;
+  color: var(--text);
+  transition: background 0.15s;
+}
+
+.usermenu-trigger:hover {
+  background: var(--glass-2);
+}
+
+.avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--accent-2), var(--accent));
+  color: var(--accent-ink);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 13px;
+  flex-shrink: 0;
+}
+
+.usermenu-email {
+  font-size: 13px;
+  color: var(--text-dim);
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (max-width: 480px) {
+  .usermenu-email {
+    display: none;
+  }
+}
+
+.menu .head {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 6px;
+}
+
+.menu .head .label {
+  font-size: 11px;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.menu .head .val {
+  font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ---------- Dashboard bits ---------- */
+.topbar {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 8px;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.insight {
+  display: flex;
+  gap: 12px;
+  padding: 13px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.insight:last-child {
+  border-bottom: none;
+}
+
+.insight .ico {
+  font-size: 18px;
+  flex-shrink: 0;
+}
+
+.insight .body {
+  min-width: 0;
+}
+
+.insight .body .t {
+  font-weight: 500;
+}
+
+.insight .body .d {
+  color: var(--text-dim);
+  font-size: 13px;
+  margin-top: 2px;
+  overflow-wrap: anywhere;
+}
+
+.chart-card {
+  padding: 18px 10px 10px 0;
+}
+
+/* ---------- Auth ---------- */
+.auth-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  padding: 20px;
+}
+
+.auth-card {
+  width: 100%;
+  max-width: 380px;
+}
+
+.auth-card .brand-lockup {
+  font-size: 32px;
+  margin-bottom: 8px;
+}

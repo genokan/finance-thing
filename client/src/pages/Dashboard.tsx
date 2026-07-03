@@ -54,7 +54,7 @@ export function Dashboard() {
         </div>
       </div>
 
-      {record.isSuccess && <div className="dim" style={{ marginBottom: 8 }}>Snapshot saved to History.</div>}
+      {record.isSuccess && <div className="success-text" style={{ marginBottom: 8 }}>Snapshot saved to History.</div>}
       {record.isError && <div className="error-text">Could not record snapshot.</div>}
 
       {/* The allocation waterfall — every dollar of net income, where it goes. */}
@@ -276,8 +276,9 @@ function BudgetSplit({
         <span><span className="dot" style={{ background: 'var(--positive)' }} />Savings {money(savings)}</span>
       </div>
 
+      {/* Bar colors match the meter and legend above: gold / indigo / mint. */}
       <BudgetBar label="Needs (essential)" pct={ftt.needsPercent} target={50} tone="accent" />
-      <BudgetBar label="Wants (discretionary)" pct={ftt.wantsPercent} target={30} tone="accent" />
+      <BudgetBar label="Wants (discretionary)" pct={ftt.wantsPercent} target={30} tone="info" />
       <BudgetBar label="Savings / surplus" pct={ftt.savingsPercent} target={20} tone="pos" />
     </div>
   )

@@ -63,7 +63,7 @@ export function History() {
         <p className="page-sub">Net worth and portfolio trends over time</p>
         <Card>
           <Empty>
-            Record at least two monthly snapshots to see trends. Use “Record this month” on the dashboard.
+            Record at least two monthly snapshots to see trends — the “Snapshot” button on the Overview page saves one.
             {ordered.length === 1 && <div className="num" style={{ marginTop: 8 }}>1 snapshot recorded so far.</div>}
           </Empty>
         </Card>

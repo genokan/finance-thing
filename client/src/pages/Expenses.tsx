@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
 import { api } from '../api/client'
 import type { BudgetBucket, Category, Debt, Expense, ExpenseKind, IntervalUnit } from '../api/types'
-import { AmountCell, BucketBadge, BucketSelect, Card, Empty, Field, Loading, MoneyInput, Modal, SectionHead } from '../components/ui'
+import { AmountCell, BucketBadge, BucketSelect, Card, DeleteButton, EditButton, Empty, Field, Loading, MoneyInput, Modal, SectionHead } from '../components/ui'
 import { dateLabel, intervalLabel, money, percent } from '../lib/format'
 
 interface FormState {
@@ -79,8 +79,8 @@ export function Expenses() {
                 </div>
                 <div className="right">
                   <AmountCell value={money(e.monthlyEquivalent, true)} label="Per month" />
-                  <button className="iconbtn" onClick={() => { setEditing(e); setOpen(true) }}>✎</button>
-                  <button className="iconbtn" onClick={() => remove.mutate(e.id)}>✕</button>
+                  <EditButton label={`Edit ${e.name}`} onClick={() => { setEditing(e); setOpen(true) }} />
+                  <DeleteButton label={`Delete ${e.name}`} onDelete={() => remove.mutate(e.id)} />
                 </div>
               </div>
             ))}
@@ -129,8 +129,8 @@ export function Expenses() {
                 </div>
                 <div className="right">
                   <AmountCell value={money(e.amount, true)} label="One-time" />
-                  <button className="iconbtn" onClick={() => { setEditing(e); setOpen(true) }}>✎</button>
-                  <button className="iconbtn" onClick={() => remove.mutate(e.id)}>✕</button>
+                  <EditButton label={`Edit ${e.name}`} onClick={() => { setEditing(e); setOpen(true) }} />
+                  <DeleteButton label={`Delete ${e.name}`} onDelete={() => remove.mutate(e.id)} />
                 </div>
               </div>
             ))}
@@ -229,10 +229,10 @@ function ExpenseModal({
             <div className="field-row">
               <input className="input" placeholder="e.g. Groceries, Dining out" value={catName} onChange={(e) => setCatName(e.target.value)} autoFocus />
               <button type="button" className="btn sm" disabled={!catName || createCat.isPending} onClick={() => createCat.mutate()}>Add</button>
-              <button type="button" className="iconbtn" onClick={() => setAddingCat(false)}>✕</button>
+              <button type="button" className="iconbtn" aria-label="Cancel new sub-category" onClick={() => setAddingCat(false)}>✕</button>
             </div>
           ) : (
-            <div style={{ display: 'flex', gap: 8 }}>
+            <div className="cluster" style={{ flexWrap: 'nowrap' }}>
               <select className="input" value={f.categoryId} onChange={set('categoryId')} style={{ flex: 1 }}>
                 <option value="">— none —</option>
                 {categories.map((c) => <option key={c.id} value={c.id}>{c.parentId ? '↳ ' : ''}{c.name}</option>)}

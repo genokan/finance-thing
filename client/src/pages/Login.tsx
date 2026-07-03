@@ -54,7 +54,7 @@ export function Login() {
 
         {error && <div className="error-text">{error}</div>}
 
-        <button className="btn" type="submit" disabled={busy} style={{ width: '100%', marginTop: 8 }}>
+        <button className="btn block" type="submit" disabled={busy} style={{ marginTop: 8 }}>
           {busy ? 'Signing in…' : 'Sign in'}
         </button>
       </form>

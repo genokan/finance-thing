@@ -2,7 +2,7 @@ import { useState, type FormEvent } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from '../api/client'
 import type { Account, BudgetBucket, Category, Debt, DebtKind, DebtTerm } from '../api/types'
-import { AmountCell, BucketBadge, BucketSelect, Card, Empty, Field, Loading, MoneyInput, Modal, SectionHead } from '../components/ui'
+import { AmountCell, BucketBadge, BucketSelect, Card, DeleteButton, EditButton, Empty, Field, Loading, MoneyInput, Modal, SectionHead } from '../components/ui'
 import { isLiabilityKind } from './Accounts'
 import { dateLabel, daysUntil, money, percent } from '../lib/format'
 
@@ -72,8 +72,8 @@ export function DebtPage() {
         </div>
         <div className="right">
           <AmountCell value={money(debtPrincipal(d))} label="Balance" />
-          <button className="iconbtn" onClick={() => editRow(d)}>✎</button>
-          <button className="iconbtn" onClick={() => remove.mutate(d.id)}>✕</button>
+          <EditButton label={`Edit ${d.name}`} onClick={() => editRow(d)} />
+          <DeleteButton label={`Delete ${d.name}`} onDelete={() => remove.mutate(d.id)} />
         </div>
       </div>
     )
@@ -84,14 +84,26 @@ export function DebtPage() {
       <h1 className="page-title">Debt</h1>
       <p className="page-sub num">{money(total)} total outstanding</p>
 
-      <SectionHead title="0% promos" action={<button className="btn sm" onClick={openNew}>+ Add</button>} />
-      <Card>{promos.length ? <div className="list">{promos.map(renderRow)}</div> : <Empty>No 0% promo balances.</Empty>}</Card>
-
-      <SectionHead title="Short-term" />
-      <Card>{shortTerm.length ? <div className="list">{shortTerm.map(renderRow)}</div> : <Empty>No short-term debt.</Empty>}</Card>
-
-      <SectionHead title="Long-term" />
-      <Card>{longTerm.length ? <div className="list">{longTerm.map(renderRow)}</div> : <Empty>No long-term debt.</Empty>}</Card>
+      {/* Only groups with debts render — three permanently-empty cards told the
+          user nothing. The Add button lives on whichever section comes first. */}
+      {all.length === 0 && (
+        <>
+          <SectionHead title="Debts" action={<button className="btn sm" onClick={openNew}>+ Add debt</button>} />
+          <Card><Empty>No debts tracked. Add a loan, card balance, or mortgage — or link a liability account on Accounts.</Empty></Card>
+        </>
+      )}
+      {[
+        { title: '0% promos', items: promos },
+        { title: 'Short-term', items: shortTerm },
+        { title: 'Long-term', items: longTerm },
+      ]
+        .filter((g) => g.items.length > 0)
+        .map((g, idx) => (
+          <div key={g.title}>
+            <SectionHead title={g.title} action={idx === 0 ? <button className="btn sm" onClick={openNew}>+ Add debt</button> : undefined} />
+            <Card><div className="list">{g.items.map(renderRow)}</div></Card>
+          </div>
+        ))}
 
       {open && (
         <DebtModal

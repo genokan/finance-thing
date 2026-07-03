@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
 import { api } from '../api/client'
 import type { Account, AccountKind, Holding, Institution } from '../api/types'
-import { AmountCell, Card, Empty, Loading, SectionHead } from '../components/ui'
+import { AmountCell, Card, DeleteButton, EditButton, Empty, Loading, SectionHead } from '../components/ui'
 import { AccountModal, HoldingModal, KIND_LABELS } from './Accounts'
 import { dateLabel, money } from '../lib/format'
 
@@ -61,7 +61,7 @@ export function Investments() {
       <SectionHead
         title="Investment accounts"
         action={
-          <div style={{ display: 'flex', gap: 8 }}>
+          <div className="cluster">
             <button className="btn ghost sm" onClick={() => refresh.mutate()} disabled={refresh.isPending}>
               {refresh.isPending ? 'Refreshing…' : '↻ Prices'}
             </button>
@@ -71,7 +71,7 @@ export function Investments() {
       />
 
       {refresh.isSuccess && (
-        <div className="dim" style={{ marginBottom: 10 }}>
+        <div className="note">
           Updated {refresh.data.updated} holding(s){refresh.data.failed.length ? `, failed: ${refresh.data.failed.join(', ')}` : ''}.
         </div>
       )}
@@ -86,7 +86,7 @@ export function Investments() {
       ) : (
         investmentAccounts.map((a) => (
           <Card key={a.id}>
-            <div className="row" style={{ paddingTop: 0 }}>
+            <div className="row lead">
               <div className="main">
                 <div className="name">{a.name} <span className="badge neutral">{KIND_LABELS[a.kind]}</span></div>
                 <div className="meta">
@@ -101,15 +101,15 @@ export function Investments() {
             {a.trackingMode === 'HOLDINGS' ? (
               <div style={{ marginTop: 8 }}>
                 {a.holdings.map((h) => (
-                  <div className="row" key={h.id} style={{ padding: '8px 4px' }}>
+                  <div className="row sub" key={h.id}>
                     <div className="main">
                       <span>{h.label}</span> {h.ticker && <span className="dim">· {h.ticker}</span>}
                       {h.unvestedValue ? <span className="dim num"> · {money(h.unvestedValue)} unvested</span> : null}
                     </div>
                     <div className="right">
                       <span className="num">{money(h.value)}</span>
-                      <button className="iconbtn" onClick={() => setHoldingModal({ accountId: a.id, editing: h })}>✎</button>
-                      <button className="iconbtn" onClick={() => removeHolding.mutate({ accountId: a.id, id: h.id })}>✕</button>
+                      <EditButton label={`Edit ${h.label}`} onClick={() => setHoldingModal({ accountId: a.id, editing: h })} />
+                      <DeleteButton label={`Delete ${h.label}`} onDelete={() => removeHolding.mutate({ accountId: a.id, id: h.id })} />
                     </div>
                   </div>
                 ))}
@@ -118,7 +118,7 @@ export function Investments() {
                 </button>
               </div>
             ) : (
-              <div className="dim" style={{ marginTop: 6, fontSize: 13 }}>
+              <div className="note" style={{ marginTop: 6, marginBottom: 0 }}>
                 Balance-tracked — switch to “Holdings” tracking on the{' '}
                 <Link to="/accounts" className="accent">Accounts</Link> page to add positions.
               </div>

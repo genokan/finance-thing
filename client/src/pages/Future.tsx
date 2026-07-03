@@ -237,7 +237,7 @@ export function Future() {
       <SectionHead
         title="What-ifs"
         action={
-          <span style={{ display: 'flex', gap: 8 }}>
+          <span className="cluster">
             {modifiers.length > 0 && (
               <button className="btn ghost sm" onClick={() => setSaving(true)}>Save as scenario</button>
             )}
@@ -256,9 +256,9 @@ export function Future() {
               <span className="chip active" style={{ color: WHATIF_COLOR }} key={i}>
                 <span style={{ color: 'var(--text)' }}>{describeModifier(m, fmtMonth)}</span>
                 <button
-                  className="x" style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'inherit' }}
+                  className="x"
                   onClick={() => setModifiers((ms) => ms.filter((_, j) => j !== i))}
-                  aria-label="Remove"
+                  aria-label={`Remove ${describeModifier(m, fmtMonth)}`}
                 >
                   ×
                 </button>
@@ -294,7 +294,7 @@ export function Future() {
                   <span style={{ color: active ? 'var(--text)' : undefined }}>{s.name}</span>
                   <span className="dim num">({s.modifiers.length})</span>
                   <button
-                    className="x" style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'inherit' }}
+                    className="x"
                     onClick={(e) => { e.stopPropagation(); deleteScenario.mutate(s.id) }}
                     aria-label={`Delete ${s.name}`}
                   >

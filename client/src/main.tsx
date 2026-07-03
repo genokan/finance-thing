@@ -8,7 +8,8 @@ import { ApiError } from './api/client'
 import { pushToast } from './lib/toast'
 import { log, installGlobalErrorLogging } from './lib/logger'
 import { Toaster } from './components/Toaster'
-import './styles.css'
+import './ui/glass.css'
+import './app.css'
 
 installGlobalErrorLogging()
 

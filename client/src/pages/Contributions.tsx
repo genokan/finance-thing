@@ -2,7 +2,7 @@ import { useState, type FormEvent } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from '../api/client'
 import type { Account, Contribution, ContributionKind, IntervalUnit } from '../api/types'
-import { AmountCell, Card, Empty, Field, Loading, MoneyInput, Modal, SectionHead } from '../components/ui'
+import { AmountCell, Card, DeleteButton, EditButton, Empty, Field, Loading, MoneyInput, Modal, SectionHead } from '../components/ui'
 import { intervalLabel, money } from '../lib/format'
 
 const KIND_LABELS: Record<ContributionKind, string> = {
@@ -35,7 +35,7 @@ export function Contributions() {
     <div>
       <h1 className="page-title">Contributions</h1>
       <p className="page-sub num">{money(total, true)}/mo to savings &amp; investing · {items.length} items</p>
-      <p className="page-sub" style={{ marginTop: -16 }}>
+      <p className="page-note">
         Money you move into assets (retirement, savings, brokerage) or extra debt principal. Builds net worth — not counted as outflow.
       </p>
 
@@ -54,8 +54,8 @@ export function Contributions() {
                 </div>
                 <div className="right">
                   <AmountCell value={money(c.monthlyEquivalent, true)} label="Per month" />
-                  <button className="iconbtn" onClick={() => { setEditing(c); setOpen(true) }}>✎</button>
-                  <button className="iconbtn" onClick={() => remove.mutate(c.id)}>✕</button>
+                  <EditButton label={`Edit ${c.name}`} onClick={() => { setEditing(c); setOpen(true) }} />
+                  <DeleteButton label={`Delete ${c.name}`} onDelete={() => remove.mutate(c.id)} />
                 </div>
               </div>
             ))}
