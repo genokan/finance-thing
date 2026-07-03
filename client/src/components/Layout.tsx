@@ -7,6 +7,7 @@ import { Brand } from './Brand'
 
 const NAV = [
   { to: '/', label: 'Overview', icon: '◎', end: true },
+  { to: '/future', label: 'Future', icon: '✦', end: false },
   { to: '/accounts', label: 'Accounts', icon: '▤', end: false },
   { to: '/investments', label: 'Investments', icon: '▲', end: false },
   { to: '/debt', label: 'Debt', icon: '▼', end: false },
@@ -15,7 +16,7 @@ const NAV = [
 ]
 
 // Bottom nav on mobile shows the most-used subset.
-const MOBILE_NAV = NAV.filter((n) => ['/', '/accounts', '/debt', '/expenses', '/income'].includes(n.to))
+const MOBILE_NAV = NAV.filter((n) => ['/', '/future', '/accounts', '/debt', '/income'].includes(n.to))
 
 function UserMenu() {
   const { logout } = useAuth()

@@ -218,6 +218,63 @@ export interface Settings {
   isAdmin: boolean
 }
 
+// ---------- Projections & scenarios ----------
+
+export type Modifier =
+  | { type: 'ONE_TIME'; month: number; amount: number; label?: string }
+  | {
+      type: 'RECURRING'
+      startMonth: number
+      endMonth?: number | null
+      monthlyAmount: number
+      annualReturnPct?: number | null
+      label?: string
+    }
+  | {
+      type: 'NEW_ASSET'
+      month: number
+      cost: number
+      annualReturnPct: number
+      downPayment?: number | null
+      financeAprPct?: number | null
+      financeTermMonths?: number | null
+      monthlyCashFlow?: number | null
+      label?: string
+    }
+
+export interface ProjectionPoint {
+  month: number
+  netWorth: number
+  cash: number
+  investments: number
+  debt: number
+}
+
+export interface ProjectionSeries {
+  points: ProjectionPoint[]
+  debtPayoffs: { name: string; month: number }[]
+  debtFreeMonth: number | null
+}
+
+export interface ProjectionResponse {
+  startYear: number
+  startMonth: number
+  assumptions: { horizonMonths: number; savingsRatePct: number; investmentReturnPct: number }
+  netMonthlyIncome: number
+  monthlyExpenses: number
+  baseline: ProjectionSeries
+  whatIf: ProjectionSeries | null
+  scenarios: ({ id: string; name: string } & ProjectionSeries)[]
+}
+
+export interface Scenario {
+  id: string
+  name: string
+  notes: string | null
+  modifiers: Modifier[]
+  createdAt: string
+}
+
 export interface ManagedUser {
   id: string
   email: string

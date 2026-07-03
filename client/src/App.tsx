@@ -3,6 +3,7 @@ import { useAuth } from './auth/AuthContext'
 import { Layout } from './components/Layout'
 import { Login } from './pages/Login'
 import { Dashboard } from './pages/Dashboard'
+import { Future } from './pages/Future'
 import { Expenses } from './pages/Expenses'
 import { Income } from './pages/Income'
 import { Accounts } from './pages/Accounts'
@@ -32,6 +33,7 @@ export function App() {
       <Route path="/login" element={<Navigate to="/" replace />} />
       <Route element={<Layout />}>
         <Route path="/" element={<Dashboard />} />
+        <Route path="/future" element={<Future />} />
         <Route path="/accounts" element={<Accounts />} />
         <Route path="/investments" element={<Investments />} />
         <Route path="/expenses" element={<Expenses />} />
