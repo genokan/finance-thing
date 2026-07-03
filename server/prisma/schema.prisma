@@ -120,6 +120,7 @@ model User {
   debts      Debt[]
   snapshots  MonthlySnapshot[]
   contributions Contribution[]
+  scenarios  Scenario[]
 }
 
 model Institution {
@@ -349,6 +350,24 @@ model Contribution {
   isActive             Boolean          @default(true)
   createdAt            DateTime         @default(now())
   updatedAt            DateTime         @updatedAt
+
+  @@index([userId])
+}
+
+// ---------- Scenarios (saved what-if modifier sets for projections) ----------
+
+model Scenario {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  name      String
+  notes     String?
+  // Modifier[] union (ONE_TIME / RECURRING / NEW_ASSET) — validated by zod at
+  // the API boundary, never queried relationally, so JSON beats child tables.
+  modifiers Json     @default("[]")
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([userId])
 }

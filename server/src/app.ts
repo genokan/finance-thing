@@ -15,6 +15,8 @@ import { budgetsRouter } from './routes/budgets'
 import { debtsRouter } from './routes/debts'
 import { contributionsRouter } from './routes/contributions'
 import { snapshotsRouter } from './routes/snapshots'
+import { projectionsRouter } from './routes/projections'
+import { scenariosRouter } from './routes/scenarios'
 import { insightsRouter } from './routes/insights'
 import { settingsRouter } from './routes/settings'
 import { usersRouter } from './routes/users'
@@ -60,6 +62,8 @@ export function createApp() {
   app.use('/api/debts', debtsRouter)
   app.use('/api/contributions', contributionsRouter)
   app.use('/api/snapshots', snapshotsRouter)
+  app.use('/api/projections', projectionsRouter)
+  app.use('/api/scenarios', scenariosRouter)
   app.use('/api/insights', insightsRouter)
   app.use('/api/settings', settingsRouter)
   app.use('/api/users', usersRouter)
