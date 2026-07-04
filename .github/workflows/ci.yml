@@ -80,7 +80,7 @@ jobs:
       # Build the amd64 image locally first so Trivy can scan the exact
       # artifact before anything is published.
       - name: Build for scan (amd64)
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           load: true
@@ -100,7 +100,7 @@ jobs:
       # Multi-arch build + push (Pi 5 homelab needs arm64). Layers are cached
       # from the scan build; pushes only on main, never for PRs.
       - name: Build and push
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           platforms: linux/amd64,linux/arm64
