@@ -17,7 +17,7 @@
     "seed": "npm run db:seed -w server"
   },
   "devDependencies": {
-    "concurrently": "^9.0.1"
+    "concurrently": "^9.2.3"
   },
   "overrides": {
     "form-data": "^4.0.6",
