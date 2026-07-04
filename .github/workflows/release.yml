@@ -1,9 +1,14 @@
 name: Release
 
 # Publishing is a deliberate act: create a GitHub release (tag like v0.2.0)
-# and this builds the multi-arch image, gates it on Trivy, and pushes
-# ghcr.io/<repo>:{semver, latest}. workflow_dispatch is the manual escape
-# hatch — it publishes only the git SHA tag, never latest.
+# and this builds the multi-arch image, gates it on Trivy, and pushes it to
+# GHCR and Docker Hub with {semver, latest} tags. workflow_dispatch is the
+# manual escape hatch — it publishes only the git SHA tag, never latest.
+#
+# Docker Hub auth: requires repo secrets DOCKERHUB_USERNAME and
+# DOCKERHUB_TOKEN (an access token from hub.docker.com → Account Settings →
+# Personal access tokens, Read & Write scope). The GitHub-linked Docker
+# login only covers the website, not registry pushes.
 on:
   release:
     types: [published]
@@ -14,6 +19,7 @@ permissions:
 
 env:
   IMAGE: ghcr.io/${{ github.repository }}
+  DOCKERHUB_IMAGE: docker.io/genokant/finance-thing
 
 jobs:
   publish:
@@ -32,11 +38,19 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Log in to Docker Hub
+        uses: docker/login-action@af1e73f918a031802d376d3c8bbc3fe56130a9b0 # v4.4.0
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
       - name: Image metadata
         id: meta
         uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
         with:
-          images: ${{ env.IMAGE }}
+          images: |
+            ${{ env.IMAGE }}
+            ${{ env.DOCKERHUB_IMAGE }}
           tags: |
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
