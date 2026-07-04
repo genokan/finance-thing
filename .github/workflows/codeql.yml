@@ -1,0 +1,32 @@
+name: CodeQL
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    # Weekly re-scan so new queries catch old code (Mon 09:20 UTC).
+    - cron: '20 9 * * 1'
+
+permissions:
+  contents: read
+
+jobs:
+  analyze:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+      actions: read
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: github/codeql-action/init@54f647b7e1bb85c95cddabcd46b0c578ec92bc1a # v4
+        with:
+          languages: javascript-typescript
+          # security-extended adds lower-confidence but broader taint queries;
+          # findings land in the repo's Security tab, not as CI failures.
+          queries: security-extended
+      - uses: github/codeql-action/analyze@54f647b7e1bb85c95cddabcd46b0c578ec92bc1a # v4
+        with:
+          category: '/language:javascript-typescript'
