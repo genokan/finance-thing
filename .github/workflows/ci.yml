@@ -10,6 +10,12 @@ on:
 permissions:
   contents: read
 
+# A new push to the same branch/PR cancels its stale in-flight run — keeps
+# Dependabot rebase storms from stacking up image builds.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   # Full-history secret scan. Config in .gitleaks.toml (repo root).
   secrets:
