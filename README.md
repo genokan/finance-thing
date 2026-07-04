@@ -95,6 +95,9 @@ bring your own. The container runs as a non-root user and health-checks
   fixable CRITICAL/HIGH vulnerabilities. Nothing is pushed to a registry from CI —
   publishing happens only when a GitHub release is created.
 - **CodeQL** (`security-extended`) on every push/PR and weekly.
+- **Scan results are public:** Trivy SARIF feeds the repo's
+  [Security tab](https://github.com/genokan/finance-thing/security/code-scanning), and each
+  GitHub release ships the full human-readable scan report as an asset.
 - **Dependabot** for npm, GitHub Actions, and the base image; all workflow actions
   are pinned to full commit SHAs.
 - Plaid access tokens are AES-256-GCM encrypted at rest; Plaid webhooks are verified
