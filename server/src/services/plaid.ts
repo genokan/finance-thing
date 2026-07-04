@@ -1,3 +1,5 @@
+import { createHash, createPublicKey, type JsonWebKey, type KeyObject } from 'crypto'
+import jwt from 'jsonwebtoken'
 import { Configuration, PlaidApi, PlaidEnvironments, Products, CountryCode } from 'plaid'
 import type { AccountKind } from '../generated/prisma/client'
 import { encrypt, decrypt } from '../lib/crypto'
@@ -131,11 +133,38 @@ export async function markItemRelinked(itemId: string, userId: string): Promise<
   await prisma.plaidItem.update({ where: { id: item.id }, data: { needsReauth: false } })
 }
 
+// Plaid signs webhooks with an ES256 JWT in the Plaid-Verification header;
+// the claim carries a SHA-256 of the exact request body. Keys are fetched by
+// kid and cached — Plaid rotates them rarely.
+const webhookKeyCache = new Map<string, KeyObject>()
+
+export async function verifyPlaidWebhook(rawBody: Buffer | undefined, verificationJwt: string | undefined): Promise<boolean> {
+  if (!rawBody || !verificationJwt) return false
+  const decoded = jwt.decode(verificationJwt, { complete: true })
+  if (!decoded || typeof decoded === 'string') return false
+  const { alg, kid } = decoded.header
+  if (alg !== 'ES256' || !kid) return false
+
+  let key = webhookKeyCache.get(kid)
+  if (!key) {
+    const { data } = await client().webhookVerificationKeyGet({ key_id: kid })
+    key = createPublicKey({ key: data.key as unknown as JsonWebKey, format: 'jwk' })
+    webhookKeyCache.set(kid, key)
+  }
+
+  try {
+    // maxAge bounds replay: Plaid issues the JWT per delivery.
+    const payload = jwt.verify(verificationJwt, key, { algorithms: ['ES256'], maxAge: '5m' }) as { request_body_sha256?: string }
+    return payload.request_body_sha256 === createHash('sha256').update(rawBody).digest('hex')
+  } catch {
+    return false
+  }
+}
+
 /**
- * Plaid ITEM webhooks flip the re-auth flag. The payload is treated as an
- * untrusted hint: it can only toggle a flag on an item_id that already exists,
- * never expose or modify financial data, so skipping Plaid's JWT verification
- * is an acceptable trade for a self-hosted deployment.
+ * Plaid ITEM webhooks flip the re-auth flag. Even verified, the payload is
+ * treated as a hint: it can only toggle a flag on an item_id that already
+ * exists, never expose or modify financial data.
  */
 export async function handleWebhook(body: { webhook_type?: string; webhook_code?: string; item_id?: string }): Promise<void> {
   if (body.webhook_type !== 'ITEM' || !body.item_id) return

@@ -1,21 +1,31 @@
 import { Router } from 'express'
 import { z } from 'zod'
 import { validate } from '../middleware/validate'
-import { createLinkToken, exchangePublicToken, syncAllBalances, disconnectItem, listItems, markItemRelinked, handleWebhook } from '../services/plaid'
+import { createLinkToken, exchangePublicToken, syncAllBalances, disconnectItem, listItems, markItemRelinked, handleWebhook, verifyPlaidWebhook } from '../services/plaid'
 import { logger } from '../lib/logger'
 
 export const plaidRouter = Router()
 
-// Public — Plaid calls this; mounted before the auth gate in app.ts. The
-// handler only toggles re-auth flags on known item_ids (see services/plaid).
+// Public — Plaid calls this; mounted before the auth gate in app.ts.
 export const plaidWebhookRouter = Router()
 plaidWebhookRouter.post('/', async (req, res) => {
+  // Signature is mandatory outside sandbox; in sandbox an unsigned local test
+  // is allowed but logged, so dev tooling keeps working.
+  const rawBody = (req as typeof req & { rawBody?: Buffer }).rawBody
+  const verified = await verifyPlaidWebhook(rawBody, req.header('Plaid-Verification')).catch(() => false)
+  if (!verified) {
+    if ((process.env.PLAID_ENV ?? 'sandbox') !== 'sandbox') {
+      res.status(401).json({ error: 'Invalid webhook signature' })
+      return
+    }
+    logger.warn('Plaid webhook accepted without a valid signature (sandbox only)')
+  }
   try {
     await handleWebhook(req.body ?? {})
   } catch (err) {
     logger.error({ err }, 'Plaid webhook handling failed')
   }
-  // Always 200 — Plaid retries non-2xx and the payload is only a hint.
+  // 200 on handled requests — Plaid retries non-2xx.
   res.json({ ok: true })
 })
 

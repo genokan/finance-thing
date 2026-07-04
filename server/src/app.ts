@@ -22,6 +22,7 @@ import { settingsRouter } from './routes/settings'
 import { usersRouter } from './routes/users'
 import { plaidRouter, plaidWebhookRouter } from './routes/plaid'
 import { globalRateLimiter } from './middleware/rateLimiter'
+import { prisma } from './lib/prisma'
 import { authenticate } from './middleware/auth'
 import pinoHttp from 'pino-http'
 import { logger } from './lib/logger'
@@ -33,7 +34,9 @@ export function createApp() {
   // Helmet's default CSP blocks the Vite-built assets / inline bootstrap; relax it
   // since this is a single-origin app serving its own trusted bundle.
   app.use(helmet({ contentSecurityPolicy: false }))
-  app.use(express.json({ limit: '10mb' }))
+  // Stash the raw body so webhook signatures (Plaid-Verification) can be
+  // checked against the exact bytes Plaid signed.
+  app.use(express.json({ limit: '10mb', verify: (req, _res, buf) => { (req as Request & { rawBody?: Buffer }).rawBody = buf } }))
   app.use(cookieParser())
   app.use(globalRateLimiter)
 
@@ -41,6 +44,16 @@ export function createApp() {
   if (process.env.HTTP_ACCESS_LOG === 'true') {
     app.use(pinoHttp({ logger }))
   }
+
+  // Liveness/readiness for container orchestration — public, DB-checked.
+  app.get('/api/health', async (_req: Request, res: Response) => {
+    try {
+      await prisma.$queryRaw`SELECT 1`
+      res.json({ ok: true })
+    } catch {
+      res.status(503).json({ ok: false, error: 'database unreachable' })
+    }
+  })
 
   // Public routes
   app.use('/api/auth', authRouter)

@@ -1,0 +1,10 @@
+# Gitleaks configuration — extends the default ruleset.
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Known false positives"
+# Design doc's empty env-var template (ENCRYPTION_KEY= with an explanatory
+# comment) trips generic-api-key on entropy; no value is present.
+commits = ["d8c714debb89825a1449dd82cddb917e9be2c779"]
+paths = ['''docs/superpowers/specs/.*\.md''']
