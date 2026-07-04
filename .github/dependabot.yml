@@ -14,8 +14,13 @@ updates:
     schedule:
       interval: weekly
 
-  # Base image bumps (node:22-slim digests / point releases).
+  # Base image bumps. Node majors are ignored on purpose: we track the active
+  # LTS line (currently 24) and move majors deliberately — Dependabot would
+  # otherwise propose odd/current non-LTS releases.
   - package-ecosystem: docker
     directory: "/"
     schedule:
       interval: weekly
+    ignore:
+      - dependency-name: node
+        update-types: ["version-update:semver-major"]

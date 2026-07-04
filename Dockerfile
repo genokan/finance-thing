@@ -7,7 +7,7 @@
 # from the root with the workspace package.json manifests in place.
 
 # ---------- Stage 1: build client + server ----------
-FROM node:22-slim AS build
+FROM node:24-slim AS build
 WORKDIR /app
 COPY package*.json ./
 COPY client/package.json client/
@@ -21,7 +21,7 @@ COPY server/ server/
 RUN DATABASE_URL="postgresql://build:build@localhost:5432/build" npm run db:generate -w server && npm run build
 
 # ---------- Stage 2: runtime ----------
-FROM node:22-slim AS runtime
+FROM node:24-slim AS runtime
 ENV NODE_ENV=production
 WORKDIR /app
 
