@@ -47,8 +47,10 @@ automatically once each month closes.
 
 ## Stack
 
-React 19 + Vite + TypeScript client · Express 5 + Prisma 7 + PostgreSQL server ·
-one Docker container serving both. The dark glass design system is a standalone,
+React 19 + Vite + TypeScript client · Express 5 + Prisma 7 API. The app ships as a
+single Docker container that serves the API and the built SPA — **PostgreSQL is not
+included**: the app connects to an external database you run yourself (the compose
+file deliberately has no postgres service). The dark glass design system is a standalone,
 token-driven stylesheet ([`client/src/ui/glass.css`](client/src/ui/glass.css)) with
 zero app-specific selectors — copy the file, override the tokens, reuse it.
 
