@@ -57,7 +57,10 @@ jobs:
           retention-days: 14
 
   # Prove the image builds and passes the vulnerability gate — never pushed.
+  # PRs only: on main pushes the Release workflow builds (and publishes dev
+  # tags) anyway, so building here too would just double the work.
   image:
+    if: github.event_name == 'pull_request'
     needs: [secrets, check]
     runs-on: ubuntu-latest
     permissions:
