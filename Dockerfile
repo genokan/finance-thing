@@ -48,6 +48,7 @@ COPY server/prisma.config.ts server/
 # Compiled server (includes dist/seed.js + generated client) + client assets
 COPY --from=build /app/server/dist server/dist
 COPY --from=build /app/server/public server/public
+COPY --chmod=755 docker/entrypoint.sh /app/entrypoint.sh
 
 # Unprivileged user — the app only reads from disk, so root ownership is fine
 # (a recursive chown would duplicate the node_modules layer).
@@ -61,7 +62,8 @@ EXPOSE 3000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
   CMD node -e "fetch('http://127.0.0.1:'+(process.env.PORT||3000)+'/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
 
-# On boot: sync schema, seed the initial user if SEED_* are set (idempotent — skips
-# if the user already exists), then start. No tunnel needed: the container runs on
-# the homelab network and reaches Postgres directly.
-CMD ["sh", "-c", "/app/node_modules/.bin/prisma db push && (if [ -n \"$SEED_EMAIL\" ] && [ -n \"$SEED_PASSWORD\" ]; then node dist/seed.js; fi) && node dist/index.js"]
+# The entrypoint script announces each boot step (env validation → schema
+# sync → optional seed → exec server). A script instead of an inline sh -c
+# chain: orchestrator UIs (Portainer) flatten CMD strings and mangle the
+# quoting if re-applied, and exec gives the server PID 1 signal handling.
+ENTRYPOINT ["/app/entrypoint.sh"]
