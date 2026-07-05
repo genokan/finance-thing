@@ -1,23 +1,28 @@
 name: Release
 
-# Publishing is a deliberate act: create a GitHub release (tag like v0.2.0)
-# and this builds the multi-arch image, gates it on Trivy, and pushes it to
-# GHCR and Docker Hub with {semver, latest} tags — plus the scan report is
-# attached to the release and the Docker Hub overview is synced from the
-# README. workflow_dispatch is the manual escape hatch — it publishes
-# dev + dev-<package.json version> tags, never latest.
+# Publishing model:
+#   - GitHub release (tag vX.Y.Z)  → semver + latest tags on both registries,
+#     scan report attached to the release, Docker Hub overview synced.
+#   - Push/merge to main           → dev + dev-<package.json version> tags.
+#   - workflow_dispatch            → same dev tags, on demand.
+# latest is only ever written by a release.
 #
-# Docker Hub auth: requires repo secrets DOCKERHUB_USERNAME and
-# DOCKERHUB_TOKEN (an access token from hub.docker.com → Account Settings →
-# Personal access tokens, Read & Write scope). The GitHub-linked Docker
-# login only covers the website, not registry pushes.
+# Docker Hub auth: repo secrets DOCKERHUB_USERNAME + DOCKERHUB_TOKEN (access
+# token with Read/Write/Delete scope — description sync rejects narrower).
 on:
   release:
     types: [published]
+  push:
+    branches: [main]
   workflow_dispatch:
 
 permissions:
   contents: read
+
+# A newer merge supersedes an in-flight dev build; real releases never cancel.
+concurrency:
+  group: publish-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name != 'release' }}
 
 env:
   IMAGE: ghcr.io/${{ github.repository }}
@@ -58,13 +63,13 @@ jobs:
           images: |
             ${{ env.IMAGE }}
             ${{ env.DOCKERHUB_IMAGE }}
-          # Releases get semver + latest; manual dispatches get dev tags.
+          # Releases get semver + latest; main merges and dispatches get dev tags.
           tags: |
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
             type=raw,value=latest,enable=${{ github.event_name == 'release' }}
-            type=raw,value=dev,enable=${{ github.event_name == 'workflow_dispatch' }}
-            type=raw,value=dev-${{ steps.version.outputs.version }},enable=${{ github.event_name == 'workflow_dispatch' }}
+            type=raw,value=dev,enable=${{ github.event_name != 'release' }}
+            type=raw,value=dev-${{ steps.version.outputs.version }},enable=${{ github.event_name != 'release' }}
 
       # Gate on the scan before anything is published.
       - name: Build for scan (amd64)
