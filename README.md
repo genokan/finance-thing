@@ -76,6 +76,12 @@ Images are published to GHCR by the Release workflow (multi-arch: amd64 + arm64)
 docker pull ghcr.io/genokan/finance-thing:latest
 ```
 
+| Tag | Points at |
+| --- | --- |
+| `latest` | Head of `main` — moves on every merge |
+| `main-<sha>` | An immutable build of a specific `main` commit, for rollback |
+| `X.Y.Z`, `X.Y` | A published GitHub release, for pinning |
+
 ```yaml
 services:
   app:
@@ -92,10 +98,11 @@ bring your own. The container runs as a non-root user and health-checks
 
 ## Security posture
 
-- **CI validates, releases publish.** Every push runs gitleaks (full history),
-  typecheck + tests with coverage, an image build, and a Trivy scan that fails on
-  fixable CRITICAL/HIGH vulnerabilities. Nothing is pushed to a registry from CI —
-  publishing happens only when a GitHub release is created.
+- **CI validates, the Release workflow publishes.** Every push runs gitleaks (full
+  history), typecheck + tests with coverage, an image build, and a Trivy scan that
+  fails on fixable CRITICAL/HIGH vulnerabilities. Nothing is pushed to a registry
+  from PR CI — publishing happens on merges to `main` and on GitHub releases, and
+  the Trivy gate runs again there before anything is pushed.
 - **CodeQL** (`security-extended`) on every push/PR and weekly.
 - **Scan results are public:** Trivy SARIF feeds the repo's
   [Security tab](https://github.com/genokan/finance-thing/security/code-scanning), and each
