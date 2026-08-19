@@ -1,7 +1,8 @@
 name: CI
 
 # Validation only — nothing is published from CI. Images reach GHCR solely
-# via the Release workflow (release.yml) when a GitHub release is published.
+# via the Release workflow (release.yml): on merges to main (latest,
+# main-<sha>) and on published releases (semver tags).
 on:
   push:
     branches: [main]
