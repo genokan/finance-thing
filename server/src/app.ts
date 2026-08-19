@@ -31,9 +31,31 @@ import { clientLogsRouter } from './routes/clientLogs'
 export function createApp() {
   const app = express()
 
-  // Helmet's default CSP blocks the Vite-built assets / inline bootstrap; relax it
-  // since this is a single-origin app serving its own trusted bundle.
-  app.use(helmet({ contentSecurityPolicy: false }))
+  // The app serves its own Vite bundle from one origin, so everything defaults
+  // to 'self'. The exceptions are the two third parties the client actually
+  // loads: Google Fonts (linked from index.html) and Plaid Link, which injects
+  // cdn.plaid.com/link/v2/stable/link-initialize.js and then renders its flow
+  // in an iframe from that same origin.
+  app.use(helmet({
+    contentSecurityPolicy: {
+      directives: {
+        defaultSrc: ["'self'"],
+        scriptSrc: ["'self'", 'https://cdn.plaid.com'],
+        // React writes inline style attributes (style={{...}}) throughout the
+        // UI, which style-src governs — so 'unsafe-inline' is load-bearing here.
+        styleSrc: ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'],
+        fontSrc: ["'self'", 'https://fonts.gstatic.com', 'data:'],
+        // Institution logos arrive from Plaid as base64 payloads.
+        imgSrc: ["'self'", 'data:', 'blob:'],
+        connectSrc: ["'self'", 'https://cdn.plaid.com'],
+        frameSrc: ["'self'", 'https://cdn.plaid.com'],
+        frameAncestors: ["'none'"],
+        baseUri: ["'self'"],
+        formAction: ["'self'"],
+        objectSrc: ["'none'"],
+      },
+    },
+  }))
   // Stash the raw body so webhook signatures (Plaid-Verification) can be
   // checked against the exact bytes Plaid signed.
   app.use(express.json({ limit: '10mb', verify: (req, _res, buf) => { (req as Request & { rawBody?: Buffer }).rawBody = buf } }))

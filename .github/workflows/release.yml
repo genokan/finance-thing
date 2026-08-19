@@ -84,6 +84,10 @@ jobs:
           format: sarif
           output: trivy-image.sarif
           exit-code: '0'
+          # Match the gate above. Without these the Security tab fills with
+          # hundreds of unfixable base-image OS CVEs, burying CodeQL findings.
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
         env:
           TRIVY_SKIP_DB_UPDATE: 'true'
       - name: Upload SARIF
