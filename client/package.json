@@ -12,18 +12,18 @@
     "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
-    "@tanstack/react-query": "^5.101.2",
-    "react": "^19.2.7",
-    "react-dom": "^19.2.7",
+    "@tanstack/react-query": "^5.101.4",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
     "react-plaid-link": "^4.1.1",
     "react-router-dom": "^7.18.2",
     "recharts": "^2.15.4"
   },
   "devDependencies": {
-    "@types/react": "^19.2.17",
-    "@types/react-dom": "^19.2.3",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.4",
     "@vitejs/plugin-react": "^4.7.0",
-    "@vitest/coverage-v8": "^4.1.9",
+    "@vitest/coverage-v8": "^3.2.7",
     "typescript": "^6.0.3",
     "vite": "^6.4.3",
     "vitest": "^4.1.7"
