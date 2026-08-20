@@ -7,13 +7,56 @@ updates:
       interval: weekly
     open-pull-requests-limit: 5
     groups:
+      # Two groups, because `groups` defaults to applies-to: version-updates
+      # and would otherwise leave security updates ungrouped — which is how we
+      # ended up with ~19 open single-package PRs.
       minor-and-patch:
+        applies-to: version-updates
         update-types: ["minor", "patch"]
+      security-minor-and-patch:
+        applies-to: security-updates
+        update-types: ["minor", "patch"]
+    ignore:
+      # Majors still open their own PR — they need reading, not batching.
+      #
+      # These are the dev/test toolchain, where majors are pure churn: they
+      # cannot reach production (the runtime image installs with --omit=dev)
+      # and a broken one only ever fails the build in front of us. Runtime
+      # packages are deliberately absent, so their majors still raise a PR.
+      #
+      # Scoped by name rather than a "*" wildcard on purpose: `ignore` filters
+      # security updates as well as version updates, so a wildcard here would
+      # quietly suppress security fixes.
+      - dependency-name: vite
+        update-types: ["version-update:semver-major"]
+      - dependency-name: vitest
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@vitest/*"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@vitejs/*"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@types/*"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: typescript
+        update-types: ["version-update:semver-major"]
+      - dependency-name: concurrently
+        update-types: ["version-update:semver-major"]
+      - dependency-name: tsx
+        update-types: ["version-update:semver-major"]
+      - dependency-name: supertest
+        update-types: ["version-update:semver-major"]
+      - dependency-name: pino-pretty
+        update-types: ["version-update:semver-major"]
 
+  # Action bumps are almost always mechanical SHA moves — one PR is plenty.
   - package-ecosystem: github-actions
     directory: "/"
     schedule:
       interval: weekly
+    groups:
+      actions:
+        applies-to: version-updates
+        patterns: ["*"]
 
   # Base image bumps. Node majors are ignored on purpose: we track the active
   # LTS line (currently 24) and move majors deliberately — Dependabot would
