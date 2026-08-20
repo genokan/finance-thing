@@ -86,6 +86,8 @@ jobs:
           exit-code: '1'
           severity: CRITICAL,HIGH
           ignore-unfixed: true
+          # Trivy does not auto-detect .trivyignore.yaml — it must be named.
+          trivyignores: .trivyignore.yaml
 
       # Full results (all severities, incl. unfixed) land in the Security tab.
       - name: Trivy SARIF report

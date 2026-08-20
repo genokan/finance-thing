@@ -1,0 +1,24 @@
+# Scoped, expiring exceptions to the CRITICAL/HIGH image gate in
+# .github/workflows/{ci,release}.yml. Anything listed here must state why it
+# is not fixable by us and carry an expiry, so the entry fails loudly instead
+# of quietly becoming permanent.
+
+vulnerabilities:
+  - id: CVE-2026-40345
+    statement: |
+      deepmerge-ts stack exhaustion on recursive object graphs.
+
+      Not fixable here: it resolves through prisma -> @prisma/config ->
+      deepmerge-ts@7.1.5, and npm `overrides` do not reach it (verified —
+      the pin is ignored even after a full lockfile regeneration). The fix
+      is Prisma 7.10.0, which is not published; 7.9.1 is latest. npm's only
+      suggested remedy is a major downgrade to prisma 6.12.0, which is worse
+      than the advisory.
+
+      Not reachable in this app: @prisma/config uses deepmerge-ts to merge
+      prisma.config.ts at CLI startup. The merged input is our own committed
+      config, never user- or network-supplied, so the DoS has no attacker
+      path here.
+
+      Remove this entry when Prisma ships 7.10.0.
+    expired_at: 2026-11-01

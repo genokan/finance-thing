@@ -74,6 +74,8 @@ jobs:
           exit-code: '1'
           severity: CRITICAL,HIGH
           ignore-unfixed: true
+          # Trivy does not auto-detect .trivyignore.yaml — it must be named.
+          trivyignores: .trivyignore.yaml
 
       # Publish the full results: SARIF to the Security tab, and the
       # human-readable report attached to the GitHub release.
