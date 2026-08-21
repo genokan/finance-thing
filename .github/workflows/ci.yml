@@ -89,7 +89,9 @@ jobs:
           # Trivy does not auto-detect .trivyignore.yaml — it must be named.
           trivyignores: .trivyignore.yaml
 
-      # Full results (all severities, incl. unfixed) land in the Security tab.
+      # Scoped to what the gate acts on. Uploading every severity including
+      # unfixed base-image CVEs put 300+ alerts in the Security tab and buried
+      # the CodeQL findings, which is the only thing there we can act on.
       - name: Trivy SARIF report
         if: always()
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
@@ -98,6 +100,9 @@ jobs:
           format: sarif
           output: trivy-image.sarif
           exit-code: '0'
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+          trivyignores: .trivyignore.yaml
         env:
           # Reuse the vuln DB pulled by the gate step — avoids a re-download.
           TRIVY_SKIP_DB_UPDATE: 'true'

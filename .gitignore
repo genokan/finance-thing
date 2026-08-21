@@ -53,3 +53,6 @@ server/public/
 
 # macOS
 .DS_Store
+
+# playwright-mcp scratch output
+.playwright-mcp/
